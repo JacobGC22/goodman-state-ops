@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Goodman Campaigns — State Ops</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -182,11 +184,13 @@
   .toast.error { border-color: #fca5a5; color: #991b1b; }
 
   /* LEAFLET OVERRIDES */
-  .leaflet-popup-content-wrapper { background: var(--bg2) !important; border: 1px solid var(--border2) !important; border-radius: 6px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--text) !important; }
-  .leaflet-popup-tip { background: var(--bg2) !important; }
+  .leaflet-popup-content-wrapper { background: #fff !important; border: 1px solid var(--border2) !important; border-radius: 8px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important; color: var(--text) !important; }
+  .leaflet-popup-tip { background: #fff !important; }
   .leaflet-popup-content { margin: 14px 16px !important; }
-  .popup-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .popup-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--navy); }
   .popup-meta { font-size: 12px; color: var(--text2); margin-bottom: 4px; font-family: var(--mono); }
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background-color: rgba(30,58,138,0.2) !important; }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background-color: rgba(30,58,138,0.85) !important; color: #fff !important; font-weight: 600; font-family: var(--mono); }
 
   .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
   .empty-state p { font-size: 14px; margin-bottom: 8px; }
@@ -346,14 +350,8 @@
         </select>
       </div>
       <div class="form-field"><label>Office Type</label>
-        <select class="form-input" id="add-office">
-          <option value="Mayor">Mayor</option>
-          <option value="State House">State House</option>
-          <option value="State Senate">State Senate</option>
-          <option value="Congressional">Congressional</option>
-          <option value="Statewide">Statewide</option>
-          <option value="Municipal">Municipal</option>
-        </select>
+        <input type="text" class="form-input" id="add-office" placeholder="e.g. Mayor, State House, County Party" list="office-type-suggestions" autocomplete="off">
+        <datalist id="office-type-suggestions"></datalist>
       </div>
       <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="add-district" placeholder="e.g. Madison or HD-42"></div>
       <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
@@ -372,6 +370,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // ============================================================
 // CONFIGURATION — Replace with your Supabase credentials
@@ -400,6 +399,7 @@ let sends = [];
 let calendarEvents = [];
 let editedTimes = {};
 let eventCategories = []; // persisted freeform categories
+let officeTypes = []; // persisted freeform office types
 
 // ============================================================
 // SUPABASE HELPERS (no-op if not configured)
@@ -515,19 +515,22 @@ function makeMarkerSvg(color) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32"><circle cx="12" cy="12" r="10" fill="${color}" opacity="0.9"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.6"/><line x1="12" y1="22" x2="12" y2="31" stroke="${color}" stroke-width="2" opacity="0.7"/></svg>`;
 }
 
+let clusterGroup = null;
+
 function initMap() {
   const center = currentState === 'WI' ? [44.5, -89.5] : [38.5, -98.0];
-  const zoom = currentState === 'WI' ? 7 : 7;
-  mapInstance = L.map('map', { zoomControl: true }).setView(center, zoom);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  mapInstance = L.map('map', { zoomControl: true }).setView(center, 7);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19, subdomains: 'abcd'
   }).addTo(mapInstance);
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 40, showCoverageOnHover: false });
+  mapInstance.addLayer(clusterGroup);
   renderMap();
 }
 
 function renderMap() {
-  if (!mapInstance) return;
-  Object.values(mapMarkers).forEach(m => mapInstance.removeLayer(m));
+  if (!mapInstance || !clusterGroup) return;
+  clusterGroup.clearLayers();
   mapMarkers = {};
   const sc = stateClients();
   sc.forEach(client => {
@@ -538,15 +541,13 @@ function renderMap() {
       className: '', iconSize: [24, 32], iconAnchor: [12, 31], popupAnchor: [0, -32]
     });
     const marker = L.marker([client.lat, client.lng], { icon })
-      .addTo(mapInstance)
-      .bindPopup(`<div class="popup-name">${client.name}</div><div class="popup-meta">${client.office} — ${client.district}</div><div class="popup-meta">PVI: ${client.pvi || '—'} &nbsp; ${client.tag || ''}</div>`)
+      .bindPopup(`<div class="popup-name">${client.name}</div><div class="popup-meta">${client.office}${client.district ? ' — ' + client.district : ''}</div><div class="popup-meta">PVI: ${client.pvi || '—'}${client.tag ? ' &nbsp; ' + client.tag : ''}</div>`)
       .on('click', () => openClientDetail(client.id));
+    clusterGroup.addLayer(marker);
     mapMarkers[client.id] = marker;
   });
-  if (sc.length) {
-    const center = currentState === 'WI' ? [44.5, -89.5] : [38.5, -98.0];
-    mapInstance.setView(center, 7);
-  }
+  const center = currentState === 'WI' ? [44.5, -89.5] : [38.5, -98.0];
+  mapInstance.setView(center, 7);
 }
 
 // ============================================================
@@ -596,9 +597,7 @@ function openClientDetail(id, editMode = false) {
       <div class="add-event-form">
         <div class="form-field"><label>Full Name</label><input type="text" class="form-input" id="edit-name" value="${c.name || ''}"></div>
         <div class="form-field"><label>Office Type</label>
-          <select class="form-input" id="edit-office">
-            ${['Mayor','State House','State Senate','Congressional','Statewide','Municipal'].map(o => `<option value="${o}" ${c.office === o ? 'selected' : ''}>${o}</option>`).join('')}
-          </select>
+          <input type="text" class="form-input" id="edit-office" value="${c.office || ''}" placeholder="e.g. Mayor, State House" list="office-type-suggestions" autocomplete="off">
         </div>
         <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}"></div>
         <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
@@ -646,6 +645,8 @@ async function saveClientEdits(id) {
   const monday_board = document.getElementById('edit-monday').value.trim();
   const notes = document.getElementById('edit-notes').value.trim();
   if (!name || !district) { showToast('Name and district are required', 'error'); return; }
+  if (office && !officeTypes.includes(office)) { await saveOfficeType(office); }
+  if (office && !officeTypes.includes(office)) { await saveOfficeType(office); }
   const updates = { name, office, district, pvi, tag, monday_board, notes };
   if (SUPABASE_CONFIGURED) {
     const result = await sbFetch(`clients?id=eq.${id}`, 'PATCH', updates);
@@ -927,6 +928,7 @@ async function saveNewClient() {
   const monday_board = document.getElementById('add-monday').value.trim();
   const notes = document.getElementById('add-notes').value.trim();
   if (!name || !district) { showToast('Name and district are required', 'error'); return; }
+  if (office && !officeTypes.includes(office)) { await saveOfficeType(office); }
   const newClient = { id: `c${Date.now()}`, name, state, office, district, pvi, tag, monday_board, notes, lat: null, lng: null };
   // Statewide capitals as fallback
   const CAPITALS = { WI: [43.0747, -89.3842], KS: [39.0473, -95.6752] };
@@ -939,9 +941,14 @@ async function saveNewClient() {
       newClient.lat = CAPITALS[state][0];
       newClient.lng = CAPITALS[state][1];
     } else if (office === 'State House') {
-      // Extract number from district field — handles HD-14, HD14, 14, etc.
+      // Extract number — handles HD-14, HD14, AD-90, AD90, 14, etc.
       const num = district.replace(/[^0-9]/g, '');
-      geoQuery = num ? `${stateName} House District ${num}` : `${district}, ${stateName}, USA`;
+      const isAssembly = district.toUpperCase().startsWith('AD');
+      if (state === 'WI') {
+        geoQuery = num ? `Wisconsin Assembly District ${num}` : `${district}, Wisconsin, USA`;
+      } else {
+        geoQuery = num ? `${stateName} House District ${num}` : `${district}, ${stateName}, USA`;
+      }
     } else if (office === 'State Senate') {
       const num = district.replace(/[^0-9]/g, '');
       geoQuery = num ? `${stateName} Senate District ${num}` : `${district}, ${stateName}, USA`;
@@ -999,6 +1006,28 @@ async function loadCalendarEventsFromSupabase() {
   renderCalendar();
 }
 
+async function saveOfficeType(ot) {
+  if (!ot || officeTypes.includes(ot)) return;
+  officeTypes.push(ot);
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch('office_types', 'POST', { id: `ot-${Date.now()}`, name: ot });
+  }
+  updateOfficeDatalist();
+}
+
+async function loadOfficeTypesFromSupabase() {
+  const data = await sbFetch('office_types?select=*&order=name');
+  if (Array.isArray(data)) { officeTypes = data.map(o => o.name); }
+  if (!officeTypes.length) officeTypes = ['Mayor','State House','State Senate','Congressional','Statewide','Municipal','County Party'];
+  updateOfficeDatalist();
+}
+
+function updateOfficeDatalist() {
+  const dl = document.getElementById('office-type-suggestions');
+  if (!dl) return;
+  dl.innerHTML = officeTypes.map(o => `<option value="${o}">`).join('');
+}
+
 async function saveCategory(cat) {
   if (!cat || eventCategories.includes(cat)) return;
   eventCategories.push(cat);
@@ -1045,6 +1074,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSendsFromSupabase();
     await loadCalendarEventsFromSupabase();
     await loadCategoriesFromSupabase();
+    await loadOfficeTypesFromSupabase();
     // Remove loading message if no clients yet
     const loadingMsg = document.getElementById('loading-msg');
     if (loadingMsg) loadingMsg.remove();
