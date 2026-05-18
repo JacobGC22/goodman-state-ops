@@ -373,12 +373,12 @@
 // ============================================================
 // CONFIGURATION — Replace with your Supabase credentials
 // ============================================================
-const SUPABASE_URL = 'https://zlhbqjsutmgwcuivxyvk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Wew7p8bd2CQQrw6TdywwzQ_oQw22Bby';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 // Monday.com API is called via Supabase Edge Function to protect your key
 // Deploy edge function from /supabase/functions/monday-sync/index.ts
 const MONDAY_EDGE_FN = `${SUPABASE_URL}/functions/v1/monday-sync`;
-const SUPABASE_CONFIGURED = true;
+const SUPABASE_CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
 // ============================================================
 // DEMO DATA — Replace with Supabase fetch when configured
@@ -763,13 +763,33 @@ async function syncMonday() {
       const data = await res.json();
       if (data.sends) results.push(...data.sends);
     }
-    results.forEach(s => { if (!sends.find(x => x.monday_id === s.monday_id)) sends.push(s); });
+    // Save new sends to Supabase; update date if changed but never overwrite a saved time
+    let savedCount = 0;
+    let updatedCount = 0;
+    for (const s of results) {
+      const existing = sends.find(x => x.monday_id === s.monday_id);
+      if (!existing) {
+        // New send — add state field from client
+        const client = clients.find(c => c.id === s.client_id);
+        s.state = client ? client.state : currentState;
+        await sbFetch('sends', 'POST', s);
+        sends.push(s);
+        savedCount++;
+      } else if (existing.date !== s.date) {
+        // Date changed on Monday side — update date only
+        await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', { date: s.date });
+        existing.date = s.date;
+        updatedCount++;
+      }
+      // Never touch send_times here — staff-saved times are preserved
+    }
     document.getElementById('sync-status').textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
     renderSchedule();
-    showToast(`Synced ${results.length} items`, 'success');
+    const msg = savedCount > 0 ? `Synced ${savedCount} new item${savedCount !== 1 ? 's' : ''}${updatedCount > 0 ? `, updated ${updatedCount}` : ''}` : updatedCount > 0 ? `Updated ${updatedCount} date${updatedCount !== 1 ? 's' : ''}` : 'Already up to date';
+    showToast(msg, 'success');
   } catch(e) {
     document.getElementById('sync-status').textContent = 'Sync failed';
-    showToast('Monday sync failed — check edge function', 'error');
+    showToast(`Monday sync failed: ${e.message || e}`, 'error');
   }
 }
 
@@ -905,10 +925,27 @@ function showToast(msg, type = 'success') {
 // ============================================================
 // INIT
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
+async function loadSendsFromSupabase() {
+  const data = await sbFetch('sends?select=*&order=date');
+  if (data && data.length) {
+    // Merge into sends array without duplicating
+    data.forEach(s => { if (!sends.find(x => x.id === s.id)) sends.push(s); });
+  }
+  // Load all saved times into editedTimes so they show immediately
+  const times = await sbFetch('send_times?select=*');
+  if (times && times.length) {
+    times.forEach(t => { if (t.send_time) editedTimes[t.monday_item_id] = t.send_time; });
+  }
+  renderSchedule();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   renderAll();
   initMap();
-  if (SUPABASE_CONFIGURED) loadClientsFromSupabase();
+  if (SUPABASE_CONFIGURED) {
+    await loadClientsFromSupabase();
+    await loadSendsFromSupabase();
+  }
 });
 </script>
 </body>
