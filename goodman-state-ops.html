@@ -605,7 +605,10 @@ function openClientDetail(id, editMode = false) {
       <button class="detail-back" onclick="showSidebarList()">&#8592; Back</button>
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
         <div class="detail-name">${c.name}</div>
-        <button class="btn btn-ghost btn-sm" onclick="openClientDetail('${id}', true)">Edit</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="openClientDetail('${id}', true)">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(226,75,74,0.3)" onclick="confirmRemoveClient('${id}')">Remove</button>
+        </div>
       </div>
       <div class="detail-fields">
         <div class="detail-field"><label>Office</label><span>${c.office || '—'}</span></div>
@@ -901,6 +904,10 @@ async function saveNewClient() {
   } catch(e) { /* geocoding failed silently */ }
   if (SUPABASE_CONFIGURED) {
     const saved = await sbFetch('clients', 'POST', newClient);
+    if (saved === null) {
+      showToast('Failed to save client to database — check console', 'error');
+      return;
+    }
   }
   clients.push(newClient);
   closeAddClient();
