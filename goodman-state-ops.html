@@ -343,7 +343,6 @@
       <span class="modal-title">Add Client</span>
       <button class="modal-close" onclick="closeAddClient()">&times;</button>
     </div>
-    <div class="config-note">These fields write to your Supabase <code>clients</code> table. Connect Supabase to persist.</div>
     <div class="add-event-form">
       <div class="form-field"><label>Full Name</label><input type="text" class="form-input" id="add-name" placeholder="e.g. Maria Gonzalez"></div>
       <div class="form-field"><label>State</label>
@@ -356,7 +355,7 @@
         <input type="text" class="form-input" id="add-office" placeholder="e.g. Mayor, State House, County Party" list="office-type-suggestions" autocomplete="off">
         <datalist id="office-type-suggestions"></datalist>
       </div>
-      <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="add-district" placeholder="e.g. Madison or HD-42"></div>
+      <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="add-district" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
       <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
       <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="add-tag" placeholder="e.g. Tier 1, Swing, Hold"></div>
       <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="add-monday" placeholder="e.g. 6414643297"></div>
@@ -510,9 +509,17 @@ function updateClientCount() {
 // ============================================================
 // MAP
 // ============================================================
-const OFFICE_COLORS = { 'Mayor': '#4a7cf0', 'State House': '#1dc8a0', 'State Senate': '#9b6dff', 'Congressional': '#f0a500', 'Statewide': '#e24b4a', 'Municipal': '#4a7cf0' };
-
-function officeColor(office) { return OFFICE_COLORS[office] || '#888'; }
+function officeColor(office) {
+  if (!office) return '#888';
+  const o = office.toLowerCase();
+  if (o.includes('house') || o.includes('assembly')) return '#1dc8a0';
+  if (o.includes('senate')) return '#9b6dff';
+  if (o.includes('congress') || o.includes('representative')) return '#f0a500';
+  if (o.includes('mayor') || o.includes('municipal') || o.includes('city')) return '#4a7cf0';
+  if (o.includes('county')) return '#6b7280';
+  // Statewide offices — anything without a district location
+  return '#e24b4a';
+}
 
 function makeMarkerSvg(color) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32"><circle cx="12" cy="12" r="10" fill="${color}" opacity="0.9"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.6"/><line x1="12" y1="22" x2="12" y2="31" stroke="${color}" stroke-width="2" opacity="0.7"/></svg>`;
@@ -565,7 +572,7 @@ function renderClientList() {
       <div class="client-name">${c.name}</div>
       <div class="client-meta">
         <span class="badge badge-office">${c.office}</span>
-        <span class="badge badge-district">${c.district}</span>
+        ${(c.district && c.district.toUpperCase() !== 'N/A') ? `<span class="badge badge-district">${c.district}</span>` : ''}
         ${c.pvi ? `<span class="badge ${pviClass(c.pvi)}">${c.pvi}</span>` : ''}
         ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
       </div>
@@ -602,7 +609,7 @@ function openClientDetail(id, editMode = false) {
         <div class="form-field"><label>Office Type</label>
           <input type="text" class="form-input" id="edit-office" value="${c.office || ''}" placeholder="e.g. Mayor, State House" list="office-type-suggestions" autocomplete="off">
         </div>
-        <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}"></div>
+        <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
         <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
         <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="edit-tag" value="${c.tag || ''}"></div>
         <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="edit-monday" value="${c.monday_board || ''}"></div>
@@ -625,7 +632,7 @@ function openClientDetail(id, editMode = false) {
       </div>
       <div class="detail-fields">
         <div class="detail-field"><label>Office</label><span>${c.office || '—'}</span></div>
-        <div class="detail-field"><label>District / City</label><span>${c.district || '—'}</span></div>
+        <div class="detail-field"><label>District / Location</label><span>${c.district || '—'}</span></div>
         <div class="detail-field"><label>PVI</label><span>${c.pvi || '—'}</span></div>
         <div class="detail-field"><label>Tag</label><span>${c.tag || '—'}</span></div>
         ${c.monday_board ? `<div class="detail-field"><label>Monday Board</label><span style="font-family:var(--mono);font-size:12px">${c.monday_board}</span></div>` : ''}
@@ -922,30 +929,44 @@ const CAPITALS = { WI: [43.0747, -89.3842], KS: [39.0473, -95.6752] };
 
 async function geocodeClient(state, office, district) {
   const stateName = state === 'WI' ? 'Wisconsin' : 'Kansas';
-  let geoQuery = '';
-  if (office === 'Statewide' || office === 'County Party' || !district) {
+  const stateCode = state;
+  const loc = (district || '').trim();
+
+  // N/A or empty = statewide, pin at capital
+  if (!loc || loc.toUpperCase() === 'N/A') {
     return CAPITALS[state] || null;
-  } else if (office === 'State House') {
-    const num = district.replace(/[^0-9]/g, '');
-    if (state === 'WI') {
-      geoQuery = num ? `Wisconsin Assembly District ${num}` : `${district}, Wisconsin, USA`;
-    } else {
-      geoQuery = num ? `Kansas House District ${num}` : `${district}, Kansas, USA`;
-    }
-  } else if (office === 'State Senate') {
-    const num = district.replace(/[^0-9]/g, '');
-    geoQuery = num ? `${stateName} Senate District ${num}` : `${district}, ${stateName}, USA`;
-  } else if (office === 'Congressional') {
-    const num = district.replace(/[^0-9]/g, '');
-    geoQuery = num ? `${stateName} Congressional District ${num}` : `${district}, ${stateName}, USA`;
-  } else {
-    geoQuery = `${district}, ${stateName}, USA`;
   }
+
+  const o = office ? office.toLowerCase() : '';
+  let geoQuery = '';
+
+  if (o.includes('house') || o.includes('assembly')) {
+    const num = loc.replace(/[^0-9]/g, '');
+    if (state === 'WI') {
+      geoQuery = num ? `Wisconsin State Assembly District ${num}` : `${loc}, Wisconsin`;
+    } else {
+      geoQuery = num ? `Kansas State House District ${num}` : `${loc}, Kansas`;
+    }
+  } else if (o.includes('senate')) {
+    const num = loc.replace(/[^0-9]/g, '');
+    geoQuery = num ? `${stateName} State Senate District ${num}` : `${loc}, ${stateName}`;
+  } else if (o.includes('congress')) {
+    const num = loc.replace(/[^0-9]/g, '');
+    geoQuery = num ? `${stateName} Congressional District ${num}` : `${loc}, ${stateName}`;
+  } else {
+    // Mayor, County, Municipal — geocode by location name
+    geoQuery = `${loc}, ${stateName}`;
+  }
+
   if (!geoQuery) return null;
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&format=json&limit=1`);
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&countrycodes=us&format=json&limit=1`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const geo = await res.json();
-    if (geo.length) return [parseFloat(geo[0].lat), parseFloat(geo[0].lon)];
+    if (geo.length) {
+      console.log(`Geocoded "${geoQuery}" → ${geo[0].lat}, ${geo[0].lon} (${geo[0].display_name})`);
+      return [parseFloat(geo[0].lat), parseFloat(geo[0].lon)];
+    }
     console.warn('Geocoding no results for:', geoQuery);
     return null;
   } catch(e) { console.warn('Geocoding failed:', e); return null; }
