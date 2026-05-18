@@ -444,16 +444,20 @@ async function saveClientNotes(clientId, notes) {
 
 async function saveCalendarEvent(evt) {
   if (SUPABASE_CONFIGURED) {
-    await sbFetch('calendar_events', 'POST', evt);
+    const saved = await sbFetch('calendar_events', 'POST', evt);
+    if (saved === null) { showToast('Failed to save event — check console', 'error'); return false; }
   }
   calendarEvents.push(evt);
+  return true;
 }
 
 async function deleteCalendarEvent(evtId) {
   if (SUPABASE_CONFIGURED) {
-    await sbFetch(`calendar_events?id=eq.${evtId}`, 'DELETE');
+    const result = await sbFetch(`calendar_events?id=eq.${evtId}`, 'DELETE');
+    if (result === null) { showToast('Failed to delete event — check console', 'error'); return false; }
   }
   calendarEvents = calendarEvents.filter(e => e.id !== evtId);
+  return true;
 }
 
 // ============================================================
@@ -857,7 +861,7 @@ function renderUpcomingEvents() {
   }).join('');
 }
 
-function addCalendarEvent() {
+async function addCalendarEvent() {
   const title = document.getElementById('evt-title').value.trim();
   const date = document.getElementById('evt-date').value;
   const type = document.getElementById('evt-type').value;
@@ -865,7 +869,8 @@ function addCalendarEvent() {
   const notes = document.getElementById('evt-notes').value.trim();
   if (!title || !date) { showToast('Title and date are required', 'error'); return; }
   const evt = { id: `e${Date.now()}`, title, date, type, client_id: clientId, notes, state: currentState };
-  saveCalendarEvent(evt);
+  const saved = await saveCalendarEvent(evt);
+  if (!saved) return;
   document.getElementById('evt-title').value = '';
   document.getElementById('evt-date').value = '';
   document.getElementById('evt-notes').value = '';
@@ -874,7 +879,8 @@ function addCalendarEvent() {
 }
 
 async function removeEvent(id) {
-  await deleteCalendarEvent(id);
+  const deleted = await deleteCalendarEvent(id);
+  if (!deleted) return;
   renderCalendar();
   showToast('Event removed', 'success');
 }
@@ -963,6 +969,12 @@ function showToast(msg, type = 'success') {
 // ============================================================
 // INIT
 // ============================================================
+async function loadCalendarEventsFromSupabase() {
+  const data = await sbFetch('calendar_events?select=*&order=date');
+  if (Array.isArray(data)) { calendarEvents = data; }
+  renderCalendar();
+}
+
 async function loadSendsFromSupabase() {
   const data = await sbFetch('sends?select=*&order=date');
   if (data && data.length) {
@@ -984,6 +996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (SUPABASE_CONFIGURED) {
     await loadClientsFromSupabase();
     await loadSendsFromSupabase();
+    await loadCalendarEventsFromSupabase();
     // Remove loading message if no clients yet
     const loadingMsg = document.getElementById('loading-msg');
     if (loadingMsg) loadingMsg.remove();
