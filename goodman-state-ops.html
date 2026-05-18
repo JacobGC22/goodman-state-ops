@@ -10,42 +10,44 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0d0f14;
-    --bg2: #151820;
-    --bg3: #1c2030;
-    --bg4: #242840;
-    --border: rgba(255,255,255,0.08);
-    --border2: rgba(255,255,255,0.15);
-    --text: #e8eaf0;
-    --text2: #9aa0b4;
-    --text3: #5a6080;
-    --accent: #4a7cf0;
-    --accent2: #2d5ccc;
-    --green: #2ecc71;
-    --amber: #f0a500;
-    --red: #e24b4a;
-    --purple: #9b6dff;
-    --teal: #1dc8a0;
+    --bg: #eef0f5;
+    --bg2: #ffffff;
+    --bg3: #f4f5f8;
+    --bg4: #e8eaf0;
+    --border: rgba(0,0,0,0.08);
+    --border2: rgba(0,0,0,0.15);
+    --text: #1a1f36;
+    --text2: #4a5173;
+    --text3: #9aa0b4;
+    --accent: #1e3a8a;
+    --accent2: #163070;
+    --green: #1a7a3e;
+    --amber: #b45309;
+    --red: #b91c1c;
+    --purple: #6d28d9;
+    --teal: #0d7a5f;
+    --navy: #1e3a8a;
+    --yellow: #f59e0b;
     --font: 'IBM Plex Sans', sans-serif;
     --mono: 'IBM Plex Mono', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; } 
 
   /* HEADER */
-  .header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--bg2); position: sticky; top: 0; z-index: 1000; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--navy); position: sticky; top: 0; z-index: 1000; }
   .header-left { display: flex; align-items: center; gap: 16px; }
-  .logo { font-family: var(--mono); font-size: 13px; color: var(--text2); letter-spacing: 0.05em; text-transform: uppercase; }
-  .logo span { color: var(--accent); }
+  .logo { font-family: var(--mono); font-size: 13px; color: rgba(255,255,255,0.7); letter-spacing: 0.05em; text-transform: uppercase; }
+  .logo span { color: #f59e0b; }
   .state-tabs { display: flex; gap: 4px; }
-  .state-tab { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-family: var(--font); font-size: 13px; cursor: pointer; transition: all 0.15s; }
-  .state-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-  .state-tab:hover:not(.active) { background: var(--bg3); color: var(--text); }
+  .state-tab { padding: 6px 14px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: rgba(255,255,255,0.8); font-family: var(--font); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .state-tab.active { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.6); color: #fff; font-weight: 500; }
+  .state-tab:hover:not(.active) { background: rgba(255,255,255,0.1); color: #fff; }
 
   /* NAV TABS */
-  .nav { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 24px; }
-  .nav-tab { padding: 12px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-family: var(--font); background: none; border-top: none; border-left: none; border-right: none; }
-  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav { display: flex; gap: 0; border-bottom: 2px solid var(--border); background: var(--bg2); padding: 0 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .nav-tab { padding: 12px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s; font-family: var(--font); background: none; border-top: none; border-left: none; border-right: none; font-weight: 500; }
+  .nav-tab.active { color: var(--navy); border-bottom-color: var(--navy); }
   .nav-tab:hover:not(.active) { color: var(--text); }
 
   /* PANELS */
@@ -55,21 +57,21 @@
   /* MAP TAB */
   .map-layout { display: grid; grid-template-columns: 1fr 320px; height: calc(100vh - 100px); }
   #map { height: 100%; background: var(--bg3); }
-  .map-sidebar { background: var(--bg2); border-left: 1px solid var(--border); overflow-y: auto; }
-  .sidebar-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .sidebar-header h2 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
-  .client-count { font-family: var(--mono); font-size: 12px; color: var(--accent); }
-  .client-list-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+  .map-sidebar { background: var(--bg2); border-left: 1px solid var(--border); overflow-y: auto; box-shadow: -2px 0 8px rgba(0,0,0,0.06); }
+  .sidebar-header { padding: 16px 20px; border-bottom: 2px solid var(--border); background: var(--bg3); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-header h2 { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--mono); }
+  .client-count { font-family: var(--mono); font-size: 12px; color: var(--navy); font-weight: 600; }
+  .client-list-item { padding: 12px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
   .client-list-item:hover { background: var(--bg3); }
-  .client-list-item.selected { background: var(--bg4); border-left: 2px solid var(--accent); }
+  .client-list-item.selected { background: #eef2ff; border-left: 3px solid var(--navy); }
   .client-name { font-weight: 500; font-size: 14px; color: var(--text); }
   .client-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
   .badge { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 400; }
-  .badge-office { background: rgba(74,124,240,0.15); color: #7aa8f8; border: 1px solid rgba(74,124,240,0.25); }
-  .badge-pvi-d { background: rgba(46,204,113,0.12); color: #5de8a0; border: 1px solid rgba(46,204,113,0.2); }
-  .badge-pvi-r { background: rgba(226,75,74,0.12); color: #f07070; border: 1px solid rgba(226,75,74,0.2); }
-  .badge-pvi-even { background: rgba(155,109,255,0.12); color: #b89bff; border: 1px solid rgba(155,109,255,0.2); }
-  .badge-district { background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border); }
+  .badge-office { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+  .badge-pvi-d { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-pvi-r { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+  .badge-pvi-even { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+  .badge-district { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
 
   /* CLIENT DETAIL PANEL */
   .client-detail { padding: 20px; }
@@ -77,13 +79,13 @@
   .detail-fields { display: grid; gap: 10px; margin-bottom: 16px; }
   .detail-field label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); display: block; margin-bottom: 3px; }
   .detail-field span { font-size: 13px; color: var(--text); }
-  .notes-area { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 10px 12px; resize: vertical; min-height: 80px; }
+  .notes-area { width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 10px 12px; resize: vertical; min-height: 80px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); }
   .notes-area:focus { outline: none; border-color: var(--accent); }
   .btn { padding: 7px 14px; border-radius: 4px; font-family: var(--font); font-size: 13px; cursor: pointer; transition: all 0.15s; border: 1px solid; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-primary:hover { background: var(--accent2); }
-  .btn-ghost { background: transparent; border-color: var(--border2); color: var(--text2); }
-  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+  .btn-primary { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 600; }
+  .btn-primary:hover { background: var(--accent2); filter: brightness(1.1); }
+  .btn-ghost { background: var(--bg2); border-color: var(--border2); color: var(--text2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); border-color: var(--navy); }
   .btn-sm { padding: 5px 10px; font-size: 12px; }
   .detail-back { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 12px; cursor: pointer; margin-bottom: 16px; background: none; border: none; font-family: var(--font); }
   .detail-back:hover { color: var(--text); }
@@ -99,28 +101,28 @@
   .sync-btn { margin-left: auto; display: flex; align-items: center; gap: 6px; }
   .sync-status { font-family: var(--mono); font-size: 11px; color: var(--text3); }
 
-  .schedule-grid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .schedule-day-header { background: var(--bg3); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-  .schedule-day-header:hover { background: var(--bg4); }
-  .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); }
-  .day-count { font-family: var(--mono); font-size: 11px; color: var(--text3); }
-  .schedule-sends { background: var(--bg2); padding: 0; }
+  .schedule-grid { display: grid; gap: 0; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .schedule-day-header { background: var(--navy); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .schedule-day-header:hover { background: var(--accent2); }
+  .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
+  .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
+  .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
   .send-row { display: grid; grid-template-columns: 200px 120px 80px 1fr 140px; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
   .send-type { font-family: var(--mono); font-size: 11px; }
-  .send-type.email { color: var(--accent); }
-  .send-type.text { color: var(--teal); }
+  .send-type.email { color: var(--navy); font-weight: 500; }
+  .send-type.text { color: var(--teal); font-weight: 500; }
   .send-item-name { font-family: var(--mono); font-size: 11px; color: var(--text2); }
   .time-input-wrap { display: flex; align-items: center; gap: 6px; }
-  .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; }
+  .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); }
   .time-input:focus { outline: none; border-color: var(--accent); }
   .time-save-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: var(--mono); }
   .time-save-btn:hover { color: var(--green); border-color: var(--green); }
   .conflict-flag { font-family: var(--mono); font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 4px; }
   .no-sends { padding: 12px 16px; color: var(--text3); font-size: 13px; font-style: italic; }
-  .overlap-warning { background: rgba(240,165,0,0.08); border: 1px solid rgba(240,165,0,0.25); border-radius: 4px; padding: 8px 12px; margin: 8px 16px; font-size: 12px; color: var(--amber); font-family: var(--mono); }
+  .overlap-warning { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 4px; padding: 8px 12px; margin: 8px 16px; font-size: 12px; color: #92400e; font-family: var(--mono); }
 
   /* CALENDAR TAB */
   .calendar-layout { padding: 24px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; min-height: calc(100vh - 100px); }
@@ -128,11 +130,11 @@
   .cal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
   .cal-header h2 { font-size: 16px; font-weight: 500; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .cal-day-name { background: var(--bg3); padding: 8px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; }
+  .cal-day-name { background: var(--navy); padding: 8px; text-align: center; font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; }
   .cal-cell { background: var(--bg2); min-height: 80px; padding: 6px 8px; cursor: pointer; transition: background 0.1s; position: relative; vertical-align: top; }
   .cal-cell:hover { background: var(--bg3); }
-  .cal-cell.today { background: rgba(74,124,240,0.08); }
-  .cal-cell.today .cal-date { color: var(--accent); font-weight: 600; }
+  .cal-cell.today { background: #eef2ff; }
+  .cal-cell.today .cal-date { color: var(--navy); font-weight: 700; }
   .cal-cell.other-month { opacity: 0.35; }
   .cal-date { font-family: var(--mono); font-size: 12px; color: var(--text2); margin-bottom: 4px; }
   .cal-event { font-size: 10px; padding: 2px 5px; border-radius: 2px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
@@ -144,12 +146,12 @@
   .cal-event.other { background: rgba(255,255,255,0.08); color: var(--text2); }
 
   /* EVENT PANEL */
-  .event-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 20px; height: fit-content; }
+  .event-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; height: fit-content; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
   .event-panel h3 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); margin-bottom: 16px; }
   .add-event-form { display: grid; gap: 10px; }
   .form-field label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--mono); display: block; margin-bottom: 4px; }
-  .form-input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 7px 10px; }
-  .form-input:focus { outline: none; border-color: var(--accent); }
+  .form-input { width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 8px 10px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); }
+  .form-input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,58,138,0.12); }
   select.form-input { cursor: pointer; }
   .upcoming-events { margin-top: 20px; }
   .upcoming-events h3 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); margin-bottom: 12px; }
@@ -166,7 +168,7 @@
   /* MODALS */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
   .modal-overlay.open { display: flex; }
-  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 24px; width: 460px; max-width: 95vw; max-height: 80vh; overflow-y: auto; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 460px; max-width: 95vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
   .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
   .modal-title { font-size: 16px; font-weight: 500; }
   .modal-close { background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; line-height: 1; }
@@ -174,10 +176,10 @@
   .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
   /* TOAST */
-  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 16px; font-size: 13px; z-index: 3000; display: none; align-items: center; gap: 8px; font-family: var(--mono); }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #fff; border: 1px solid var(--border2); border-radius: 8px; padding: 10px 16px; font-size: 13px; z-index: 3000; display: none; align-items: center; gap: 8px; font-family: var(--mono); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .toast.show { display: flex; }
-  .toast.success { border-color: rgba(46,204,113,0.4); color: var(--green); }
-  .toast.error { border-color: rgba(226,75,74,0.4); color: var(--red); }
+  .toast.success { border-color: #86efac; color: #166534; }
+  .toast.error { border-color: #fca5a5; color: #991b1b; }
 
   /* LEAFLET OVERRIDES */
   .leaflet-popup-content-wrapper { background: var(--bg2) !important; border: 1px solid var(--border2) !important; border-radius: 6px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--text) !important; }
@@ -192,7 +194,7 @@
   .config-note { background: rgba(74,124,240,0.08); border: 1px solid rgba(74,124,240,0.2); border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #7aa8f8; font-family: var(--mono); margin-bottom: 16px; }
 
   .schedule-day-block { margin-bottom: 1px; }
-  .send-count-badge { background: var(--bg4); border-radius: 10px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  .send-count-badge { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.9); }
 
   /* ADD CLIENT FORM */
   .add-client-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
@@ -293,14 +295,15 @@
             <input type="date" class="form-input" id="evt-date">
           </div>
           <div class="form-field">
-            <label>Type</label>
-            <select class="form-input" id="evt-type">
-              <option value="deadline">Deadline</option>
-              <option value="election">Election</option>
-              <option value="report">Report</option>
-              <option value="birthday">Birthday</option>
-              <option value="send">Send</option>
-              <option value="other">Other</option>
+            <label>Category</label>
+            <input type="text" class="form-input" id="evt-type" placeholder="e.g. Deadline, Birthday, Election" list="category-suggestions" autocomplete="off">
+            <datalist id="category-suggestions"></datalist>
+          </div>
+          <div class="form-field">
+            <label>Applies to</label>
+            <select class="form-input" id="evt-state-scope">
+              <option value="current">Current state only</option>
+              <option value="both">Both states (WI + KS)</option>
             </select>
           </div>
           <div class="form-field">
@@ -378,7 +381,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_Wew7p8bd2CQQrw6TdywwzQ_oQw22Bby';
 // Monday.com API is called via Supabase Edge Function to protect your key
 // Deploy edge function from /supabase/functions/monday-sync/index.ts
 const MONDAY_EDGE_FN = `${SUPABASE_URL}/functions/v1/monday-sync`;
-const SUPABASE_CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+const SUPABASE_CONFIGURED = true;
 
 // ============================================================
 // APP STATE — all data loaded from Supabase on init
@@ -396,6 +399,7 @@ let clients = [];
 let sends = [];
 let calendarEvents = [];
 let editedTimes = {};
+let eventCategories = []; // persisted freeform categories
 
 // ============================================================
 // SUPABASE HELPERS (no-op if not configured)
@@ -810,7 +814,19 @@ async function syncMonday() {
 // ============================================================
 // CALENDAR
 // ============================================================
-const EVENT_COLORS = { deadline: '#e24b4a', birthday: '#9b6dff', election: '#f0a500', report: '#1dc8a0', send: '#4a7cf0', other: '#888' };
+const PRESET_COLORS = { deadline: '#b91c1c', birthday: '#6d28d9', election: '#b45309', report: '#0d7a5f', send: '#1e3a8a', other: '#6b7280' };
+const COLOR_POOL = ['#1e3a8a','#b91c1c','#0d7a5f','#b45309','#6d28d9','#0369a1','#9a3412','#065f46','#92400e','#5b21b6'];
+const categoryColorMap = {};
+function getCategoryColor(cat) {
+  if (!cat) return '#6b7280';
+  const key = cat.toLowerCase();
+  if (PRESET_COLORS[key]) return PRESET_COLORS[key];
+  if (!categoryColorMap[key]) {
+    const idx = Object.keys(categoryColorMap).length % COLOR_POOL.length;
+    categoryColorMap[key] = COLOR_POOL[idx];
+  }
+  return categoryColorMap[key];
+}
 
 function renderCalendar() {
   const label = document.getElementById('cal-month-label');
@@ -820,7 +836,7 @@ function renderCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-  const stateEvents = calendarEvents.filter(e => e.state === currentState || !e.state);
+  const stateEvents = calendarEvents.filter(e => e.state === currentState || e.state === 'both' || !e.state);
   const grid = document.getElementById('cal-grid');
   let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-day-name">${d}</div>`).join('');
   for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell other-month"></div>`;
@@ -830,7 +846,7 @@ function renderCalendar() {
     const dayEvents = stateEvents.filter(e => e.date === dateStr);
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="clickCalDay('${dateStr}')">
       <div class="cal-date">${d}</div>
-      ${dayEvents.map(e => `<div class="cal-event ${e.type}" title="${e.title}" onclick="event.stopPropagation()">${e.title}</div>`).join('')}
+      ${dayEvents.map(e => `<div class="cal-event" style="background:${getCategoryColor(e.type)}20;color:${getCategoryColor(e.type)};border-left:3px solid ${getCategoryColor(e.type)}" title="${e.title}" onclick="event.stopPropagation()">${e.title}</div>`).join('')}
     </div>`;
   }
   grid.innerHTML = html;
@@ -843,14 +859,14 @@ function clickCalDay(dateStr) {
 
 function renderUpcomingEvents() {
   const today = new Date().toISOString().slice(0,10);
-  const stateEvents = calendarEvents.filter(e => e.state === currentState || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
+  const stateEvents = calendarEvents.filter(e => e.state === currentState || e.state === 'both' || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
   const list = document.getElementById('upcoming-events-list');
   if (!stateEvents.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No upcoming events.</div>'; return; }
   list.innerHTML = stateEvents.map(e => {
     const d = new Date(e.date + 'T12:00:00');
     const client = e.client_id ? clients.find(c => c.id === e.client_id) : null;
     return `<div class="upcoming-event-item">
-      <div class="event-dot" style="background:${EVENT_COLORS[e.type] || '#888'}"></div>
+      <div class="event-dot" style="background:${getCategoryColor(e.type)}"></div>
       <div class="event-info">
         <div class="event-title">${e.title}</div>
         <div class="event-date">${d.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
@@ -864,11 +880,19 @@ function renderUpcomingEvents() {
 async function addCalendarEvent() {
   const title = document.getElementById('evt-title').value.trim();
   const date = document.getElementById('evt-date').value;
-  const type = document.getElementById('evt-type').value;
+  const type = document.getElementById('evt-type').value.trim() || 'other';
+  const scope = document.getElementById('evt-state-scope').value;
   const clientId = document.getElementById('evt-client').value;
   const notes = document.getElementById('evt-notes').value.trim();
   if (!title || !date) { showToast('Title and date are required', 'error'); return; }
-  const evt = { id: `e${Date.now()}`, title, date, type, client_id: clientId, notes, state: currentState };
+
+  // Save new category if it's not already known
+  if (type && type !== 'other' && !eventCategories.includes(type.toLowerCase())) {
+    await saveCategory(type.toLowerCase());
+  }
+
+  const eventState = scope === 'both' ? 'both' : currentState;
+  const evt = { id: `e${Date.now()}`, title, date, type: type.toLowerCase(), client_id: clientId, notes, state: eventState };
   const saved = await saveCalendarEvent(evt);
   if (!saved) return;
   document.getElementById('evt-title').value = '';
@@ -975,6 +999,29 @@ async function loadCalendarEventsFromSupabase() {
   renderCalendar();
 }
 
+async function saveCategory(cat) {
+  if (!cat || eventCategories.includes(cat)) return;
+  eventCategories.push(cat);
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch('event_categories', 'POST', { id: `cat-${Date.now()}`, name: cat });
+  }
+  updateCategoryDatalist();
+}
+
+async function loadCategoriesFromSupabase() {
+  const data = await sbFetch('event_categories?select=*&order=name');
+  if (Array.isArray(data)) { eventCategories = data.map(c => c.name); }
+  // Seed with presets if empty
+  if (!eventCategories.length) eventCategories = ['deadline','election','report','birthday','send','other'];
+  updateCategoryDatalist();
+}
+
+function updateCategoryDatalist() {
+  const dl = document.getElementById('category-suggestions');
+  if (!dl) return;
+  dl.innerHTML = eventCategories.map(c => `<option value="${c.charAt(0).toUpperCase() + c.slice(1)}">`).join('');
+}
+
 async function loadSendsFromSupabase() {
   const data = await sbFetch('sends?select=*&order=date');
   if (data && data.length) {
@@ -997,6 +1044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadClientsFromSupabase();
     await loadSendsFromSupabase();
     await loadCalendarEventsFromSupabase();
+    await loadCategoriesFromSupabase();
     // Remove loading message if no clients yet
     const loadingMsg = document.getElementById('loading-msg');
     if (loadingMsg) loadingMsg.remove();
