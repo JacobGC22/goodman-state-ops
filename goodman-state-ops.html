@@ -373,8 +373,8 @@
 // ============================================================
 // CONFIGURATION — Replace with your Supabase credentials
 // ============================================================
-const SUPABASE_URL = 'https://zlhbqjsutmgwcuivxyvk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Wew7p8bd2CQQrw6TdywwzQ_oQw22Bby';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 // Monday.com API is called via Supabase Edge Function to protect your key
 // Deploy edge function from /supabase/functions/monday-sync/index.ts
 const MONDAY_EDGE_FN = `${SUPABASE_URL}/functions/v1/monday-sync`;
@@ -898,13 +898,37 @@ async function saveNewClient() {
   const notes = document.getElementById('add-notes').value.trim();
   if (!name || !district) { showToast('Name and district are required', 'error'); return; }
   const newClient = { id: `c${Date.now()}`, name, state, office, district, pvi, tag, monday_board, notes, lat: null, lng: null };
-  // Geocode
+  // Statewide capitals as fallback
+  const CAPITALS = { WI: [43.0747, -89.3842], KS: [39.0473, -95.6752] };
+  // Geocode — query varies by office type so Nominatim can resolve it
   try {
-    const query = encodeURIComponent(`${district}, ${state === 'WI' ? 'Wisconsin' : 'Kansas'}, USA`);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
-    const geo = await res.json();
-    if (geo.length) { newClient.lat = parseFloat(geo[0].lat); newClient.lng = parseFloat(geo[0].lon); }
-  } catch(e) { /* geocoding failed silently */ }
+    const stateName = state === 'WI' ? 'Wisconsin' : 'Kansas';
+    let geoQuery = '';
+    if (office === 'Statewide') {
+      // Pin at state capital, no geocoding needed
+      newClient.lat = CAPITALS[state][0];
+      newClient.lng = CAPITALS[state][1];
+    } else if (office === 'State House') {
+      // Extract number from district field — handles HD-14, HD14, 14, etc.
+      const num = district.replace(/[^0-9]/g, '');
+      geoQuery = num ? `${stateName} House District ${num}` : `${district}, ${stateName}, USA`;
+    } else if (office === 'State Senate') {
+      const num = district.replace(/[^0-9]/g, '');
+      geoQuery = num ? `${stateName} Senate District ${num}` : `${district}, ${stateName}, USA`;
+    } else if (office === 'Congressional') {
+      const num = district.replace(/[^0-9]/g, '');
+      geoQuery = num ? `${stateName} Congressional District ${num}` : `${district}, ${stateName}, USA`;
+    } else {
+      // Mayor, Municipal — geocode by city name
+      geoQuery = `${district}, ${stateName}, USA`;
+    }
+    if (geoQuery) {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&format=json&limit=1`);
+      const geo = await res.json();
+      if (geo.length) { newClient.lat = parseFloat(geo[0].lat); newClient.lng = parseFloat(geo[0].lon); }
+      else { console.warn('Geocoding found no results for:', geoQuery); }
+    }
+  } catch(e) { console.warn('Geocoding failed:', e); }
   if (SUPABASE_CONFIGURED) {
     const saved = await sbFetch('clients', 'POST', newClient);
     if (saved === null) {
