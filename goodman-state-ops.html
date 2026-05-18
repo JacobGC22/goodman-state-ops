@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goodman Campaigns — State Ops</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg2: #151820;
+    --bg3: #1c2030;
+    --bg4: #242840;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8eaf0;
+    --text2: #9aa0b4;
+    --text3: #5a6080;
+    --accent: #4a7cf0;
+    --accent2: #2d5ccc;
+    --green: #2ecc71;
+    --amber: #f0a500;
+    --red: #e24b4a;
+    --purple: #9b6dff;
+    --teal: #1dc8a0;
+    --font: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--bg2); position: sticky; top: 0; z-index: 1000; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-family: var(--mono); font-size: 13px; color: var(--text2); letter-spacing: 0.05em; text-transform: uppercase; }
+  .logo span { color: var(--accent); }
+  .state-tabs { display: flex; gap: 4px; }
+  .state-tab { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-family: var(--font); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .state-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .state-tab:hover:not(.active) { background: var(--bg3); color: var(--text); }
+
+  /* NAV TABS */
+  .nav { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 24px; }
+  .nav-tab { padding: 12px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-family: var(--font); background: none; border-top: none; border-left: none; border-right: none; }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav-tab:hover:not(.active) { color: var(--text); }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* MAP TAB */
+  .map-layout { display: grid; grid-template-columns: 1fr 320px; height: calc(100vh - 100px); }
+  #map { height: 100%; background: var(--bg3); }
+  .map-sidebar { background: var(--bg2); border-left: 1px solid var(--border); overflow-y: auto; }
+  .sidebar-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-header h2 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
+  .client-count { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .client-list-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+  .client-list-item:hover { background: var(--bg3); }
+  .client-list-item.selected { background: var(--bg4); border-left: 2px solid var(--accent); }
+  .client-name { font-weight: 500; font-size: 14px; color: var(--text); }
+  .client-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .badge { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 400; }
+  .badge-office { background: rgba(74,124,240,0.15); color: #7aa8f8; border: 1px solid rgba(74,124,240,0.25); }
+  .badge-pvi-d { background: rgba(46,204,113,0.12); color: #5de8a0; border: 1px solid rgba(46,204,113,0.2); }
+  .badge-pvi-r { background: rgba(226,75,74,0.12); color: #f07070; border: 1px solid rgba(226,75,74,0.2); }
+  .badge-pvi-even { background: rgba(155,109,255,0.12); color: #b89bff; border: 1px solid rgba(155,109,255,0.2); }
+  .badge-district { background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border); }
+
+  /* CLIENT DETAIL PANEL */
+  .client-detail { padding: 20px; }
+  .detail-name { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .detail-fields { display: grid; gap: 10px; margin-bottom: 16px; }
+  .detail-field label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); display: block; margin-bottom: 3px; }
+  .detail-field span { font-size: 13px; color: var(--text); }
+  .notes-area { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 10px 12px; resize: vertical; min-height: 80px; }
+  .notes-area:focus { outline: none; border-color: var(--accent); }
+  .btn { padding: 7px 14px; border-radius: 4px; font-family: var(--font); font-size: 13px; cursor: pointer; transition: all 0.15s; border: 1px solid; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-ghost { background: transparent; border-color: var(--border2); color: var(--text2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .detail-back { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 12px; cursor: pointer; margin-bottom: 16px; background: none; border: none; font-family: var(--font); }
+  .detail-back:hover { color: var(--text); }
+
+  /* SCHEDULE TAB */
+  .schedule-layout { padding: 24px; }
+  .schedule-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .schedule-toolbar h2 { font-size: 16px; font-weight: 500; }
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-nav button { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+  .month-nav button:hover { color: var(--text); border-color: var(--border2); }
+  .month-label { font-family: var(--mono); font-size: 14px; color: var(--text); min-width: 120px; text-align: center; }
+  .sync-btn { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .sync-status { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  .schedule-grid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .schedule-day-header { background: var(--bg3); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .schedule-day-header:hover { background: var(--bg4); }
+  .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); }
+  .day-count { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .schedule-sends { background: var(--bg2); padding: 0; }
+  .send-row { display: grid; grid-template-columns: 200px 120px 80px 1fr 140px; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .send-row:last-child { border-bottom: none; }
+  .send-row:hover { background: var(--bg3); }
+  .send-client { font-weight: 500; font-size: 13px; }
+  .send-type { font-family: var(--mono); font-size: 11px; }
+  .send-type.email { color: var(--accent); }
+  .send-type.text { color: var(--teal); }
+  .send-item-name { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  .time-input-wrap { display: flex; align-items: center; gap: 6px; }
+  .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; }
+  .time-input:focus { outline: none; border-color: var(--accent); }
+  .time-save-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: var(--mono); }
+  .time-save-btn:hover { color: var(--green); border-color: var(--green); }
+  .conflict-flag { font-family: var(--mono); font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 4px; }
+  .no-sends { padding: 12px 16px; color: var(--text3); font-size: 13px; font-style: italic; }
+  .overlap-warning { background: rgba(240,165,0,0.08); border: 1px solid rgba(240,165,0,0.25); border-radius: 4px; padding: 8px 12px; margin: 8px 16px; font-size: 12px; color: var(--amber); font-family: var(--mono); }
+
+  /* CALENDAR TAB */
+  .calendar-layout { padding: 24px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; min-height: calc(100vh - 100px); }
+  .calendar-main { }
+  .cal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .cal-header h2 { font-size: 16px; font-weight: 500; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .cal-day-name { background: var(--bg3); padding: 8px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; }
+  .cal-cell { background: var(--bg2); min-height: 80px; padding: 6px 8px; cursor: pointer; transition: background 0.1s; position: relative; vertical-align: top; }
+  .cal-cell:hover { background: var(--bg3); }
+  .cal-cell.today { background: rgba(74,124,240,0.08); }
+  .cal-cell.today .cal-date { color: var(--accent); font-weight: 600; }
+  .cal-cell.other-month { opacity: 0.35; }
+  .cal-date { font-family: var(--mono); font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .cal-event { font-size: 10px; padding: 2px 5px; border-radius: 2px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .cal-event.deadline { background: rgba(226,75,74,0.2); color: #f08080; }
+  .cal-event.birthday { background: rgba(155,109,255,0.2); color: #b89bff; }
+  .cal-event.election { background: rgba(240,165,0,0.2); color: #f0c050; }
+  .cal-event.report { background: rgba(30,200,160,0.2); color: #50ddb0; }
+  .cal-event.send { background: rgba(74,124,240,0.2); color: #7aa8f8; }
+  .cal-event.other { background: rgba(255,255,255,0.08); color: var(--text2); }
+
+  /* EVENT PANEL */
+  .event-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 20px; height: fit-content; }
+  .event-panel h3 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); margin-bottom: 16px; }
+  .add-event-form { display: grid; gap: 10px; }
+  .form-field label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--mono); display: block; margin-bottom: 4px; }
+  .form-input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--font); font-size: 13px; padding: 7px 10px; }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+  select.form-input { cursor: pointer; }
+  .upcoming-events { margin-top: 20px; }
+  .upcoming-events h3 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); margin-bottom: 12px; }
+  .upcoming-event-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .upcoming-event-item:last-child { border-bottom: none; }
+  .event-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .event-info { flex: 1; }
+  .event-title { font-size: 13px; color: var(--text); }
+  .event-date { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .event-client-tag { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .event-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 2px; }
+  .event-delete:hover { color: var(--red); }
+
+  /* MODALS */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 24px; width: 460px; max-width: 95vw; max-height: 80vh; overflow-y: auto; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .modal-title { font-size: 16px; font-weight: 500; }
+  .modal-close { background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 16px; font-size: 13px; z-index: 3000; display: none; align-items: center; gap: 8px; font-family: var(--mono); }
+  .toast.show { display: flex; }
+  .toast.success { border-color: rgba(46,204,113,0.4); color: var(--green); }
+  .toast.error { border-color: rgba(226,75,74,0.4); color: var(--red); }
+
+  /* LEAFLET OVERRIDES */
+  .leaflet-popup-content-wrapper { background: var(--bg2) !important; border: 1px solid var(--border2) !important; border-radius: 6px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--text) !important; }
+  .leaflet-popup-tip { background: var(--bg2) !important; }
+  .leaflet-popup-content { margin: 14px 16px !important; }
+  .popup-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .popup-meta { font-size: 12px; color: var(--text2); margin-bottom: 4px; font-family: var(--mono); }
+
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
+  .empty-state p { font-size: 14px; margin-bottom: 8px; }
+
+  .config-note { background: rgba(74,124,240,0.08); border: 1px solid rgba(74,124,240,0.2); border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #7aa8f8; font-family: var(--mono); margin-bottom: 16px; }
+
+  .schedule-day-block { margin-bottom: 1px; }
+  .send-count-badge { background: var(--bg4); border-radius: 10px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+  /* ADD CLIENT FORM */
+  .add-client-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 0 0 20px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); font-family: var(--mono); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Goodman Campaigns / <span>State Ops</span></div>
+    <div class="state-tabs">
+      <button class="state-tab active" onclick="switchState('WI')">Wisconsin</button>
+      <button class="state-tab" onclick="switchState('KS')">Kansas</button>
+    </div>
+  </div>
+  <button class="btn btn-ghost btn-sm" onclick="openAddClient()">+ Add Client</button>
+</div>
+
+<div class="nav">
+  <button class="nav-tab active" onclick="switchTab('map')">Map</button>
+  <button class="nav-tab" onclick="switchTab('schedule')">Send Schedule</button>
+  <button class="nav-tab" onclick="switchTab('calendar')">Calendar</button>
+</div>
+
+<!-- MAP TAB -->
+<div id="panel-map" class="panel active">
+  <div class="map-layout">
+    <div id="map"></div>
+    <div class="map-sidebar">
+      <div id="sidebar-list-view">
+        <div class="sidebar-header">
+          <h2 id="sidebar-state-label">Wisconsin</h2>
+          <span class="client-count" id="client-count-badge">12 clients</span>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#4a7cf0"></div>Mayor</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#1dc8a0"></div>State House</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#9b6dff"></div>State Senate</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f0a500"></div>Congressional</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e24b4a"></div>Statewide</div>
+        </div>
+        <div id="client-list"></div>
+      </div>
+      <div id="sidebar-detail-view" style="display:none">
+        <div class="client-detail" id="client-detail-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULE TAB -->
+<div id="panel-schedule" class="panel">
+  <div class="schedule-layout">
+    <div class="schedule-toolbar">
+      <div class="month-nav">
+        <button onclick="changeMonth(-1)">&#8592;</button>
+        <span class="month-label" id="month-label"></span>
+        <button onclick="changeMonth(1)">&#8594;</button>
+      </div>
+      <h2 id="schedule-state-label">Wisconsin</h2>
+      <div class="sync-btn">
+        <span class="sync-status" id="sync-status">Configure Monday.com API to enable sync</span>
+        <button class="btn btn-ghost btn-sm" onclick="syncMonday()">&#8635; Sync Monday</button>
+      </div>
+    </div>
+    <div id="schedule-content"></div>
+  </div>
+</div>
+
+<!-- CALENDAR TAB -->
+<div id="panel-calendar" class="panel">
+  <div class="calendar-layout">
+    <div class="calendar-main">
+      <div class="cal-header">
+        <div class="month-nav">
+          <button onclick="changeCalMonth(-1)">&#8592;</button>
+          <span class="month-label" id="cal-month-label"></span>
+          <button onclick="changeCalMonth(1)">&#8594;</button>
+        </div>
+        <h2 id="calendar-state-label">Wisconsin</h2>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div>
+      <div class="event-panel">
+        <h3>Add Event</h3>
+        <div class="add-event-form">
+          <div class="form-field">
+            <label>Title</label>
+            <input type="text" class="form-input" id="evt-title" placeholder="e.g. FEC Report Due">
+          </div>
+          <div class="form-field">
+            <label>Date</label>
+            <input type="date" class="form-input" id="evt-date">
+          </div>
+          <div class="form-field">
+            <label>Type</label>
+            <select class="form-input" id="evt-type">
+              <option value="deadline">Deadline</option>
+              <option value="election">Election</option>
+              <option value="report">Report</option>
+              <option value="birthday">Birthday</option>
+              <option value="send">Send</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Client (optional)</label>
+            <select class="form-input" id="evt-client">
+              <option value="">All / State-wide</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Notes</label>
+            <input type="text" class="form-input" id="evt-notes" placeholder="Optional">
+          </div>
+          <button class="btn btn-primary" onclick="addCalendarEvent()">Add Event</button>
+        </div>
+      </div>
+      <div class="upcoming-events" style="margin-top: 16px;">
+        <div class="event-panel">
+          <h3>Upcoming</h3>
+          <div id="upcoming-events-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLIENT MODAL -->
+<div class="modal-overlay" id="add-client-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Client</span>
+      <button class="modal-close" onclick="closeAddClient()">&times;</button>
+    </div>
+    <div class="config-note">These fields write to your Supabase <code>clients</code> table. Connect Supabase to persist.</div>
+    <div class="add-event-form">
+      <div class="form-field"><label>Full Name</label><input type="text" class="form-input" id="add-name" placeholder="e.g. Maria Gonzalez"></div>
+      <div class="form-field"><label>State</label>
+        <select class="form-input" id="add-state">
+          <option value="WI">Wisconsin</option>
+          <option value="KS">Kansas</option>
+        </select>
+      </div>
+      <div class="form-field"><label>Office Type</label>
+        <select class="form-input" id="add-office">
+          <option value="Mayor">Mayor</option>
+          <option value="State House">State House</option>
+          <option value="State Senate">State Senate</option>
+          <option value="Congressional">Congressional</option>
+          <option value="Statewide">Statewide</option>
+          <option value="Municipal">Municipal</option>
+        </select>
+      </div>
+      <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="add-district" placeholder="e.g. Madison or HD-42"></div>
+      <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
+      <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="add-tag" placeholder="e.g. Tier 1, Swing, Hold"></div>
+      <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="add-monday" placeholder="e.g. 6414643297"></div>
+      <div class="form-field"><label>Notes</label><textarea class="form-input" id="add-notes" rows="3" placeholder="Freeform notes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAddClient()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewClient()">Add Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ============================================================
+// CONFIGURATION — Replace with your Supabase credentials
+// ============================================================
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// Monday.com API is called via Supabase Edge Function to protect your key
+// Deploy edge function from /supabase/functions/monday-sync/index.ts
+const MONDAY_EDGE_FN = `${SUPABASE_URL}/functions/v1/monday-sync`;
+const SUPABASE_CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+
+// ============================================================
+// DEMO DATA — Replace with Supabase fetch when configured
+// ============================================================
+const DEMO_CLIENTS = [
+  // Wisconsin
+  { id: 'wi-1', name: 'Sarah Chen', state: 'WI', office: 'Mayor', district: 'Madison', pvi: 'D+22', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0731, lng: -89.4012 },
+  { id: 'wi-2', name: 'Marcus Webb', state: 'WI', office: 'Mayor', district: 'Racine', pvi: 'D+8', tag: 'Swing', monday_board: '', notes: '', lat: 42.7261, lng: -87.7829 },
+  { id: 'wi-3', name: 'Diane Kowalski', state: 'WI', office: 'Mayor', district: 'Green Bay', pvi: 'D+2', tag: 'Swing', monday_board: '', notes: '', lat: 44.5133, lng: -88.0133 },
+  { id: 'wi-4', name: 'Tony Reyes', state: 'WI', office: 'State Senate', district: 'SD-16', pvi: 'D+5', tag: 'Pickup', monday_board: '', notes: '', lat: 43.0389, lng: -76.1472 },
+  { id: 'wi-5', name: 'Paula Nguyen', state: 'WI', office: 'State House', district: 'AD-62', pvi: 'D+11', tag: 'Hold', monday_board: '', notes: '', lat: 44.2619, lng: -88.4154 },
+  { id: 'wi-6', name: 'Jim Hartley', state: 'WI', office: 'Mayor', district: 'Kenosha', pvi: 'R+1', tag: 'Swing', monday_board: '', notes: '', lat: 42.5847, lng: -87.8212 },
+  { id: 'wi-7', name: 'Rosa Flores', state: 'WI', office: 'Mayor', district: 'Milwaukee', pvi: 'D+35', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0389, lng: -87.9065 },
+  { id: 'wi-8', name: 'Ben Ostrowski', state: 'WI', office: 'Congressional', district: 'WI-3', pvi: 'D+3', tag: 'Pickup', monday_board: '', notes: '', lat: 44.8113, lng: -91.4985 },
+  { id: 'wi-9', name: 'Carol Simmons', state: 'WI', office: 'Mayor', district: 'Appleton', pvi: 'R+4', tag: 'Swing', monday_board: '', notes: '', lat: 44.2619, lng: -88.4154 },
+  { id: 'wi-10', name: 'David Park', state: 'WI', office: 'Mayor', district: 'Waukesha', pvi: 'R+12', tag: 'Reach', monday_board: '', notes: '', lat: 43.0117, lng: -88.2315 },
+  { id: 'wi-11', name: 'Lynn Bauer', state: 'WI', office: 'Statewide', district: 'AG', pvi: 'D+1', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0731, lng: -89.3850 },
+  { id: 'wi-12', name: 'Omar Hassan', state: 'WI', office: 'State Senate', district: 'SD-4', pvi: 'D+18', tag: 'Hold', monday_board: '', notes: '', lat: 43.0550, lng: -87.9670 },
+  // Kansas
+  { id: 'ks-1', name: 'Priya Patel', state: 'KS', office: 'State House', district: 'HD-10', pvi: 'R+6', tag: 'Pickup', monday_board: '', notes: '', lat: 39.0119, lng: -94.8001 },
+  { id: 'ks-2', name: 'Robert Cunningham', state: 'KS', office: 'State House', district: 'HD-18', pvi: 'D+3', tag: 'Hold', monday_board: '', notes: '', lat: 38.9717, lng: -95.2353 },
+  { id: 'ks-3', name: 'Angela Foster', state: 'KS', office: 'Statewide', district: 'SOS', pvi: 'R+8', tag: 'Tier 1', monday_board: '6414643297', notes: '', lat: 39.0473, lng: -95.6752 },
+  { id: 'ks-4', name: 'James Whitfield', state: 'KS', office: 'State House', district: 'HD-32', pvi: 'R+14', tag: 'Reach', monday_board: '', notes: '', lat: 37.6922, lng: -97.3378 },
+  { id: 'ks-5', name: 'Maria Giebler', state: 'KS', office: 'State House', district: 'HD-2', pvi: 'R+4', tag: 'Swing', monday_board: '', notes: '', lat: 39.1141, lng: -94.6275 },
+  { id: 'ks-6', name: 'Dan Holloway', state: 'KS', office: 'State House', district: 'HD-45', pvi: 'D+2', tag: 'Hold', monday_board: '', notes: '', lat: 38.8404, lng: -97.6114 },
+];
+
+// Demo sends (normally pulled from Monday + send times from Supabase)
+const DEMO_SENDS = [
+  { id: 's1', client_id: 'wi-1', client_name: 'Chen', item_name: 'Chen - 1E', type: 'email', date: '2026-05-18', time: '10:00', monday_id: '' },
+  { id: 's2', client_id: 'wi-3', client_name: 'Kowalski', item_name: 'Kowalski - 1E', type: 'email', date: '2026-05-18', time: '', monday_id: '' },
+  { id: 's3', client_id: 'wi-7', client_name: 'Flores', item_name: 'Flores - 1E', type: 'email', date: '2026-05-18', time: '10:30', monday_id: '' },
+  { id: 's4', client_id: 'wi-2', client_name: 'Webb', item_name: 'Webb - 1T', type: 'text', date: '2026-05-19', time: '12:00', monday_id: '' },
+  { id: 's5', client_id: 'wi-5', client_name: 'Nguyen', item_name: 'Nguyen - 1E', type: 'email', date: '2026-05-20', time: '', monday_id: '' },
+  { id: 's6', client_id: 'wi-1', client_name: 'Chen', item_name: 'Chen - 2E', type: 'email', date: '2026-05-22', time: '', monday_id: '' },
+  { id: 's7', client_id: 'wi-11', client_name: 'Bauer', item_name: 'Bauer - 1E', type: 'email', date: '2026-05-22', time: '09:00', monday_id: '' },
+  { id: 's8', client_id: 'wi-8', client_name: 'Ostrowski', item_name: 'Ostrowski - 1T', type: 'text', date: '2026-05-22', time: '13:00', monday_id: '' },
+];
+
+// Demo calendar events
+const DEMO_EVENTS = [
+  { id: 'e1', title: 'FEC Q2 Report Due', date: '2026-06-15', type: 'report', client_id: '', notes: '', state: 'WI' },
+  { id: 'e2', title: 'Primary Election', date: '2026-08-11', type: 'election', client_id: '', notes: 'All WI clients', state: 'WI' },
+  { id: 'e3', title: "Chen birthday", date: '2026-06-03', type: 'birthday', client_id: 'wi-1', notes: '', state: 'WI' },
+  { id: 'e4', title: 'KS Filing Deadline', date: '2026-06-01', type: 'deadline', client_id: '', notes: '', state: 'KS' },
+  { id: 'e5', title: 'KS Primary', date: '2026-08-04', type: 'election', client_id: '', notes: '', state: 'KS' },
+];
+
+// ============================================================
+// APP STATE
+// ============================================================
+let currentState = 'WI';
+let currentTab = 'map';
+let scheduleMonth = new Date(2026, 4, 1); // May 2026
+let calMonth = new Date(2026, 4, 1);
+let selectedClientId = null;
+let mapInstance = null;
+let mapMarkers = {};
+let clients = [...DEMO_CLIENTS];
+let sends = [...DEMO_SENDS];
+let calendarEvents = [...DEMO_EVENTS];
+let editedTimes = {};
+
+// ============================================================
+// SUPABASE HELPERS (no-op if not configured)
+// ============================================================
+async function sbFetch(path, method = 'GET', body = null) {
+  if (!SUPABASE_CONFIGURED) return null;
+  const opts = { method, headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, opts);
+    return r.ok ? await r.json() : null;
+  } catch(e) { return null; }
+}
+
+async function loadClientsFromSupabase() {
+  const data = await sbFetch('clients?select=*&order=name');
+  if (data && data.length) { clients = data; renderAll(); }
+}
+
+async function saveSendTime(sendId, time) {
+  if (!SUPABASE_CONFIGURED) { editedTimes[sendId] = time; return true; }
+  const existing = await sbFetch(`send_times?monday_item_id=eq.${sendId}&select=*`);
+  if (existing && existing.length) {
+    await sbFetch(`send_times?monday_item_id=eq.${sendId}`, 'PATCH', { send_time: time });
+  } else {
+    await sbFetch('send_times', 'POST', { monday_item_id: sendId, send_time: time });
+  }
+  editedTimes[sendId] = time;
+  return true;
+}
+
+async function saveClientNotes(clientId, notes) {
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch(`clients?id=eq.${clientId}`, 'PATCH', { notes });
+  }
+  const c = clients.find(x => x.id === clientId);
+  if (c) c.notes = notes;
+}
+
+async function saveCalendarEvent(evt) {
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch('calendar_events', 'POST', evt);
+  }
+  calendarEvents.push(evt);
+}
+
+async function deleteCalendarEvent(evtId) {
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch(`calendar_events?id=eq.${evtId}`, 'DELETE');
+  }
+  calendarEvents = calendarEvents.filter(e => e.id !== evtId);
+}
+
+// ============================================================
+// STATE / TAB SWITCHING
+// ============================================================
+function switchState(state) {
+  currentState = state;
+  document.querySelectorAll('.state-tab').forEach(t => t.classList.toggle('active', t.textContent === (state === 'WI' ? 'Wisconsin' : 'Kansas')));
+  document.getElementById('sidebar-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
+  document.getElementById('schedule-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
+  document.getElementById('calendar-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
+  selectedClientId = null;
+  showSidebarList();
+  renderAll();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach((t, i) => t.classList.toggle('active', ['map','schedule','calendar'][i] === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${tab}`).classList.add('active');
+  if (tab === 'map' && !mapInstance) initMap();
+  else if (tab === 'map') { setTimeout(() => mapInstance && mapInstance.invalidateSize(), 50); renderMap(); }
+  if (tab === 'schedule') renderSchedule();
+  if (tab === 'calendar') renderCalendar();
+}
+
+function renderAll() {
+  updateClientCount();
+  renderClientList();
+  if (currentTab === 'map') renderMap();
+  if (currentTab === 'schedule') renderSchedule();
+  if (currentTab === 'calendar') renderCalendar();
+  populateClientDropdown();
+}
+
+function stateClients() { return clients.filter(c => c.state === currentState); }
+
+function updateClientCount() {
+  document.getElementById('client-count-badge').textContent = `${stateClients().length} clients`;
+}
+
+// ============================================================
+// MAP
+// ============================================================
+const OFFICE_COLORS = { 'Mayor': '#4a7cf0', 'State House': '#1dc8a0', 'State Senate': '#9b6dff', 'Congressional': '#f0a500', 'Statewide': '#e24b4a', 'Municipal': '#4a7cf0' };
+
+function officeColor(office) { return OFFICE_COLORS[office] || '#888'; }
+
+function makeMarkerSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32"><circle cx="12" cy="12" r="10" fill="${color}" opacity="0.9"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.6"/><line x1="12" y1="22" x2="12" y2="31" stroke="${color}" stroke-width="2" opacity="0.7"/></svg>`;
+}
+
+function initMap() {
+  const center = currentState === 'WI' ? [44.5, -89.5] : [38.5, -98.0];
+  const zoom = currentState === 'WI' ? 7 : 7;
+  mapInstance = L.map('map', { zoomControl: true }).setView(center, zoom);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19, subdomains: 'abcd'
+  }).addTo(mapInstance);
+  renderMap();
+}
+
+function renderMap() {
+  if (!mapInstance) return;
+  Object.values(mapMarkers).forEach(m => mapInstance.removeLayer(m));
+  mapMarkers = {};
+  const sc = stateClients();
+  sc.forEach(client => {
+    if (!client.lat || !client.lng) return;
+    const color = officeColor(client.office);
+    const icon = L.divIcon({
+      html: makeMarkerSvg(color),
+      className: '', iconSize: [24, 32], iconAnchor: [12, 31], popupAnchor: [0, -32]
+    });
+    const marker = L.marker([client.lat, client.lng], { icon })
+      .addTo(mapInstance)
+      .bindPopup(`<div class="popup-name">${client.name}</div><div class="popup-meta">${client.office} — ${client.district}</div><div class="popup-meta">PVI: ${client.pvi || '—'} &nbsp; ${client.tag || ''}</div>`)
+      .on('click', () => openClientDetail(client.id));
+    mapMarkers[client.id] = marker;
+  });
+  if (sc.length) {
+    const center = currentState === 'WI' ? [44.5, -89.5] : [38.5, -98.0];
+    mapInstance.setView(center, 7);
+  }
+}
+
+// ============================================================
+// CLIENT LIST SIDEBAR
+// ============================================================
+function renderClientList() {
+  const list = document.getElementById('client-list');
+  const sc = stateClients();
+  if (!sc.length) { list.innerHTML = '<div class="empty-state"><p>No clients in this state.</p><p>Use "Add Client" to get started.</p></div>'; return; }
+  list.innerHTML = sc.map(c => `
+    <div class="client-list-item ${c.id === selectedClientId ? 'selected' : ''}" onclick="openClientDetail('${c.id}')">
+      <div class="client-name">${c.name}</div>
+      <div class="client-meta">
+        <span class="badge badge-office">${c.office}</span>
+        <span class="badge badge-district">${c.district}</span>
+        ${c.pvi ? `<span class="badge ${pviClass(c.pvi)}">${c.pvi}</span>` : ''}
+        ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function pviClass(pvi) {
+  if (!pvi) return 'badge-district';
+  if (pvi.startsWith('D')) return 'badge-pvi-d';
+  if (pvi.startsWith('R')) return 'badge-pvi-r';
+  return 'badge-pvi-even';
+}
+
+function showSidebarList() {
+  document.getElementById('sidebar-list-view').style.display = '';
+  document.getElementById('sidebar-detail-view').style.display = 'none';
+}
+
+function openClientDetail(id) {
+  selectedClientId = id;
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  renderClientList();
+  if (mapMarkers[id]) mapMarkers[id].openPopup();
+  const detail = document.getElementById('client-detail-content');
+  detail.innerHTML = `
+    <button class="detail-back" onclick="showSidebarList()">&#8592; Back</button>
+    <div class="detail-name">${c.name}</div>
+    <div class="detail-fields">
+      <div class="detail-field"><label>Office</label><span>${c.office}</span></div>
+      <div class="detail-field"><label>District / City</label><span>${c.district}</span></div>
+      <div class="detail-field"><label>PVI</label><span>${c.pvi || '—'}</span></div>
+      <div class="detail-field"><label>Tag</label><span>${c.tag || '—'}</span></div>
+      ${c.monday_board ? `<div class="detail-field"><label>Monday Board</label><span style="font-family:var(--mono);font-size:12px">${c.monday_board}</span></div>` : ''}
+    </div>
+    <div class="form-field" style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--mono);display:block;margin-bottom:6px">Notes</label>
+      <textarea class="notes-area" id="notes-field-${id}" rows="5">${c.notes || ''}</textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" onclick="saveNotes('${id}')">Save Notes</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(226,75,74,0.3)" onclick="confirmRemoveClient('${id}')">Remove</button>
+    </div>
+  `;
+  document.getElementById('sidebar-list-view').style.display = 'none';
+  document.getElementById('sidebar-detail-view').style.display = '';
+}
+
+function saveNotes(id) {
+  const notes = document.getElementById(`notes-field-${id}`).value;
+  saveClientNotes(id, notes);
+  showToast('Notes saved', 'success');
+}
+
+function confirmRemoveClient(id) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  if (confirm(`Remove ${c.name} from the system? This cannot be undone.`)) {
+    clients = clients.filter(x => x.id !== id);
+    showSidebarList();
+    renderAll();
+    showToast(`${c.name} removed`, 'success');
+  }
+}
+
+// ============================================================
+// SCHEDULE
+// ============================================================
+function renderSchedule() {
+  const label = document.getElementById('month-label');
+  label.textContent = scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const year = scheduleMonth.getFullYear();
+  const month = scheduleMonth.getMonth();
+  const sc = stateClients();
+  const clientIds = sc.map(c => c.id);
+  const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
+  const monthSends = sends.filter(s => s.date.startsWith(monthStr) && clientIds.includes(s.client_id));
+  const byDay = {};
+  monthSends.forEach(s => { if (!byDay[s.date]) byDay[s.date] = []; byDay[s.date].push(s); });
+  const sortedDays = Object.keys(byDay).sort();
+  const content = document.getElementById('schedule-content');
+  if (!sortedDays.length) {
+    content.innerHTML = `<div class="empty-state"><p>No sends found for ${scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p><p style="font-size:12px;color:var(--text3);margin-top:4px">Sync Monday.com or sends will appear here as they're added.</p></div>`;
+    return;
+  }
+  content.innerHTML = sortedDays.map(date => {
+    const daySends = byDay[date];
+    const d = new Date(date + 'T12:00:00');
+    const dayLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' });
+    const emailSends = daySends.filter(s => s.type === 'email');
+    const conflicts = detectConflicts(emailSends);
+    return `
+      <div class="schedule-day-block">
+        <div class="schedule-day-header">
+          <span class="day-label">${dayLabel}</span>
+          <span class="send-count-badge">${daySends.length} send${daySends.length !== 1 ? 's' : ''}</span>
+        </div>
+        ${conflicts.length ? `<div class="overlap-warning">⚠ Possible time overlap: ${conflicts.join(', ')} — check send times below</div>` : ''}
+        <div class="schedule-sends">
+          ${daySends.map(s => {
+            const currentTime = editedTimes[s.id] || s.time || '';
+            const client = clients.find(c => c.id === s.client_id);
+            return `
+              <div class="send-row">
+                <div class="send-client">${client ? client.name : s.client_name}</div>
+                <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
+                <div class="send-item-name">${s.item_name}</div>
+                <div class="time-input-wrap">
+                  <input type="time" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="--:--">
+                  <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
+                </div>
+                <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${formatTime(currentTime)}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function formatTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+}
+
+function detectConflicts(emailSends) {
+  const withTimes = emailSends.filter(s => editedTimes[s.id] || s.time);
+  const conflicts = [];
+  for (let i = 0; i < withTimes.length; i++) {
+    for (let j = i+1; j < withTimes.length; j++) {
+      const t1 = timeToMins(editedTimes[withTimes[i].id] || withTimes[i].time);
+      const t2 = timeToMins(editedTimes[withTimes[j].id] || withTimes[j].time);
+      if (Math.abs(t1 - t2) < 30) conflicts.push(`${withTimes[i].client_name} / ${withTimes[j].client_name}`);
+    }
+  }
+  return conflicts;
+}
+
+function timeToMins(t) { if (!t) return -999; const [h,m] = t.split(':').map(Number); return h*60+m; }
+
+async function saveTime(sendId) {
+  const val = document.getElementById(`time-${sendId}`).value;
+  await saveSendTime(sendId, val);
+  renderSchedule();
+  showToast('Time saved', 'success');
+}
+
+function changeMonth(dir) { scheduleMonth = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + dir, 1); renderSchedule(); }
+
+async function syncMonday() {
+  const sc = stateClients().filter(c => c.monday_board);
+  if (!sc.length) { showToast('No clients have Monday board IDs configured', 'error'); return; }
+  if (!SUPABASE_CONFIGURED) { showToast('Configure Supabase to enable Monday sync', 'error'); return; }
+  document.getElementById('sync-status').textContent = 'Syncing...';
+  try {
+    const year = scheduleMonth.getFullYear();
+    const month = scheduleMonth.toLocaleString('default', { month: 'long' });
+    const groupTarget = `${month} ${year}`;
+    const results = [];
+    for (const client of sc) {
+      const res = await fetch(MONDAY_EDGE_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ board_id: client.monday_board, group_target: groupTarget, client_id: client.id, client_name: client.name.split(' ')[1] || client.name })
+      });
+      const data = await res.json();
+      if (data.sends) results.push(...data.sends);
+    }
+    results.forEach(s => { if (!sends.find(x => x.monday_id === s.monday_id)) sends.push(s); });
+    document.getElementById('sync-status').textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
+    renderSchedule();
+    showToast(`Synced ${results.length} items`, 'success');
+  } catch(e) {
+    document.getElementById('sync-status').textContent = 'Sync failed';
+    showToast('Monday sync failed — check edge function', 'error');
+  }
+}
+
+// ============================================================
+// CALENDAR
+// ============================================================
+const EVENT_COLORS = { deadline: '#e24b4a', birthday: '#9b6dff', election: '#f0a500', report: '#1dc8a0', send: '#4a7cf0', other: '#888' };
+
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  label.textContent = calMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const year = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  const stateEvents = calendarEvents.filter(e => e.state === currentState || !e.state);
+  const grid = document.getElementById('cal-grid');
+  let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-day-name">${d}</div>`).join('');
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell other-month"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+    const dayEvents = stateEvents.filter(e => e.date === dateStr);
+    html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="clickCalDay('${dateStr}')">
+      <div class="cal-date">${d}</div>
+      ${dayEvents.map(e => `<div class="cal-event ${e.type}" title="${e.title}" onclick="event.stopPropagation()">${e.title}</div>`).join('')}
+    </div>`;
+  }
+  grid.innerHTML = html;
+  renderUpcomingEvents();
+}
+
+function clickCalDay(dateStr) {
+  document.getElementById('evt-date').value = dateStr;
+}
+
+function renderUpcomingEvents() {
+  const today = new Date().toISOString().slice(0,10);
+  const stateEvents = calendarEvents.filter(e => e.state === currentState || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
+  const list = document.getElementById('upcoming-events-list');
+  if (!stateEvents.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No upcoming events.</div>'; return; }
+  list.innerHTML = stateEvents.map(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    const client = e.client_id ? clients.find(c => c.id === e.client_id) : null;
+    return `<div class="upcoming-event-item">
+      <div class="event-dot" style="background:${EVENT_COLORS[e.type] || '#888'}"></div>
+      <div class="event-info">
+        <div class="event-title">${e.title}</div>
+        <div class="event-date">${d.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+        ${client ? `<div class="event-client-tag">${client.name}</div>` : ''}
+      </div>
+      <button class="event-delete" onclick="removeEvent('${e.id}')" title="Delete">×</button>
+    </div>`;
+  }).join('');
+}
+
+function addCalendarEvent() {
+  const title = document.getElementById('evt-title').value.trim();
+  const date = document.getElementById('evt-date').value;
+  const type = document.getElementById('evt-type').value;
+  const clientId = document.getElementById('evt-client').value;
+  const notes = document.getElementById('evt-notes').value.trim();
+  if (!title || !date) { showToast('Title and date are required', 'error'); return; }
+  const evt = { id: `e${Date.now()}`, title, date, type, client_id: clientId, notes, state: currentState };
+  saveCalendarEvent(evt);
+  document.getElementById('evt-title').value = '';
+  document.getElementById('evt-date').value = '';
+  document.getElementById('evt-notes').value = '';
+  renderCalendar();
+  showToast('Event added', 'success');
+}
+
+async function removeEvent(id) {
+  await deleteCalendarEvent(id);
+  renderCalendar();
+  showToast('Event removed', 'success');
+}
+
+function changeCalMonth(dir) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + dir, 1); renderCalendar(); }
+
+// ============================================================
+// ADD CLIENT
+// ============================================================
+function openAddClient() { document.getElementById('add-client-modal').classList.add('open'); }
+function closeAddClient() { document.getElementById('add-client-modal').classList.remove('open'); }
+
+async function saveNewClient() {
+  const name = document.getElementById('add-name').value.trim();
+  const state = document.getElementById('add-state').value;
+  const office = document.getElementById('add-office').value;
+  const district = document.getElementById('add-district').value.trim();
+  const pvi = document.getElementById('add-pvi').value.trim();
+  const tag = document.getElementById('add-tag').value.trim();
+  const monday_board = document.getElementById('add-monday').value.trim();
+  const notes = document.getElementById('add-notes').value.trim();
+  if (!name || !district) { showToast('Name and district are required', 'error'); return; }
+  const newClient = { id: `c${Date.now()}`, name, state, office, district, pvi, tag, monday_board, notes, lat: null, lng: null };
+  // Geocode
+  try {
+    const query = encodeURIComponent(`${district}, ${state === 'WI' ? 'Wisconsin' : 'Kansas'}, USA`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
+    const geo = await res.json();
+    if (geo.length) { newClient.lat = parseFloat(geo[0].lat); newClient.lng = parseFloat(geo[0].lon); }
+  } catch(e) { /* geocoding failed silently */ }
+  if (SUPABASE_CONFIGURED) {
+    const saved = await sbFetch('clients', 'POST', newClient);
+  }
+  clients.push(newClient);
+  closeAddClient();
+  if (state !== currentState) { currentState = state; document.querySelectorAll('.state-tab').forEach(t => t.classList.toggle('active', t.textContent.includes(state === 'WI' ? 'Wisconsin' : 'Kansas'))); }
+  renderAll();
+  showToast(`${name} added`, 'success');
+}
+
+function populateClientDropdown() {
+  const sel = document.getElementById('evt-client');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All / State-wide</option>' + stateClients().map(c => `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${c.name}</option>`).join('');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer;
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+  initMap();
+  if (SUPABASE_CONFIGURED) loadClientsFromSupabase();
+});
+</script>
+</body>
+</html>
