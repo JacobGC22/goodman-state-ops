@@ -402,11 +402,14 @@ let editedTimes = {};
 // ============================================================
 async function sbFetch(path, method = 'GET', body = null) {
   if (!SUPABASE_CONFIGURED) return null;
-  const opts = { method, headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' } };
+  const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' };
+  // Only request row return on writes — GET and DELETE don't need it
+  if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, opts);
-    if (!r.ok) { console.error('Supabase error', r.status, await r.text()); return null; }
+    if (!r.ok) { console.error('Supabase error', r.status, path, await r.text()); return null; }
     if (method === 'DELETE') return true;
     const text = await r.text();
     return text ? JSON.parse(text) : true;
