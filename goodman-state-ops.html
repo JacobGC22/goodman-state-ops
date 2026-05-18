@@ -381,65 +381,20 @@ const MONDAY_EDGE_FN = `${SUPABASE_URL}/functions/v1/monday-sync`;
 const SUPABASE_CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
 // ============================================================
-// DEMO DATA — Replace with Supabase fetch when configured
-// ============================================================
-const DEMO_CLIENTS = [
-  // Wisconsin
-  { id: 'wi-1', name: 'Sarah Chen', state: 'WI', office: 'Mayor', district: 'Madison', pvi: 'D+22', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0731, lng: -89.4012 },
-  { id: 'wi-2', name: 'Marcus Webb', state: 'WI', office: 'Mayor', district: 'Racine', pvi: 'D+8', tag: 'Swing', monday_board: '', notes: '', lat: 42.7261, lng: -87.7829 },
-  { id: 'wi-3', name: 'Diane Kowalski', state: 'WI', office: 'Mayor', district: 'Green Bay', pvi: 'D+2', tag: 'Swing', monday_board: '', notes: '', lat: 44.5133, lng: -88.0133 },
-  { id: 'wi-4', name: 'Tony Reyes', state: 'WI', office: 'State Senate', district: 'SD-16', pvi: 'D+5', tag: 'Pickup', monday_board: '', notes: '', lat: 43.0389, lng: -76.1472 },
-  { id: 'wi-5', name: 'Paula Nguyen', state: 'WI', office: 'State House', district: 'AD-62', pvi: 'D+11', tag: 'Hold', monday_board: '', notes: '', lat: 44.2619, lng: -88.4154 },
-  { id: 'wi-6', name: 'Jim Hartley', state: 'WI', office: 'Mayor', district: 'Kenosha', pvi: 'R+1', tag: 'Swing', monday_board: '', notes: '', lat: 42.5847, lng: -87.8212 },
-  { id: 'wi-7', name: 'Rosa Flores', state: 'WI', office: 'Mayor', district: 'Milwaukee', pvi: 'D+35', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0389, lng: -87.9065 },
-  { id: 'wi-8', name: 'Ben Ostrowski', state: 'WI', office: 'Congressional', district: 'WI-3', pvi: 'D+3', tag: 'Pickup', monday_board: '', notes: '', lat: 44.8113, lng: -91.4985 },
-  { id: 'wi-9', name: 'Carol Simmons', state: 'WI', office: 'Mayor', district: 'Appleton', pvi: 'R+4', tag: 'Swing', monday_board: '', notes: '', lat: 44.2619, lng: -88.4154 },
-  { id: 'wi-10', name: 'David Park', state: 'WI', office: 'Mayor', district: 'Waukesha', pvi: 'R+12', tag: 'Reach', monday_board: '', notes: '', lat: 43.0117, lng: -88.2315 },
-  { id: 'wi-11', name: 'Lynn Bauer', state: 'WI', office: 'Statewide', district: 'AG', pvi: 'D+1', tag: 'Tier 1', monday_board: '', notes: '', lat: 43.0731, lng: -89.3850 },
-  { id: 'wi-12', name: 'Omar Hassan', state: 'WI', office: 'State Senate', district: 'SD-4', pvi: 'D+18', tag: 'Hold', monday_board: '', notes: '', lat: 43.0550, lng: -87.9670 },
-  // Kansas
-  { id: 'ks-1', name: 'Priya Patel', state: 'KS', office: 'State House', district: 'HD-10', pvi: 'R+6', tag: 'Pickup', monday_board: '', notes: '', lat: 39.0119, lng: -94.8001 },
-  { id: 'ks-2', name: 'Robert Cunningham', state: 'KS', office: 'State House', district: 'HD-18', pvi: 'D+3', tag: 'Hold', monday_board: '', notes: '', lat: 38.9717, lng: -95.2353 },
-  { id: 'ks-3', name: 'Angela Foster', state: 'KS', office: 'Statewide', district: 'SOS', pvi: 'R+8', tag: 'Tier 1', monday_board: '6414643297', notes: '', lat: 39.0473, lng: -95.6752 },
-  { id: 'ks-4', name: 'James Whitfield', state: 'KS', office: 'State House', district: 'HD-32', pvi: 'R+14', tag: 'Reach', monday_board: '', notes: '', lat: 37.6922, lng: -97.3378 },
-  { id: 'ks-5', name: 'Maria Giebler', state: 'KS', office: 'State House', district: 'HD-2', pvi: 'R+4', tag: 'Swing', monday_board: '', notes: '', lat: 39.1141, lng: -94.6275 },
-  { id: 'ks-6', name: 'Dan Holloway', state: 'KS', office: 'State House', district: 'HD-45', pvi: 'D+2', tag: 'Hold', monday_board: '', notes: '', lat: 38.8404, lng: -97.6114 },
-];
-
-// Demo sends (normally pulled from Monday + send times from Supabase)
-const DEMO_SENDS = [
-  { id: 's1', client_id: 'wi-1', client_name: 'Chen', item_name: 'Chen - 1E', type: 'email', date: '2026-05-18', time: '10:00', monday_id: '' },
-  { id: 's2', client_id: 'wi-3', client_name: 'Kowalski', item_name: 'Kowalski - 1E', type: 'email', date: '2026-05-18', time: '', monday_id: '' },
-  { id: 's3', client_id: 'wi-7', client_name: 'Flores', item_name: 'Flores - 1E', type: 'email', date: '2026-05-18', time: '10:30', monday_id: '' },
-  { id: 's4', client_id: 'wi-2', client_name: 'Webb', item_name: 'Webb - 1T', type: 'text', date: '2026-05-19', time: '12:00', monday_id: '' },
-  { id: 's5', client_id: 'wi-5', client_name: 'Nguyen', item_name: 'Nguyen - 1E', type: 'email', date: '2026-05-20', time: '', monday_id: '' },
-  { id: 's6', client_id: 'wi-1', client_name: 'Chen', item_name: 'Chen - 2E', type: 'email', date: '2026-05-22', time: '', monday_id: '' },
-  { id: 's7', client_id: 'wi-11', client_name: 'Bauer', item_name: 'Bauer - 1E', type: 'email', date: '2026-05-22', time: '09:00', monday_id: '' },
-  { id: 's8', client_id: 'wi-8', client_name: 'Ostrowski', item_name: 'Ostrowski - 1T', type: 'text', date: '2026-05-22', time: '13:00', monday_id: '' },
-];
-
-// Demo calendar events
-const DEMO_EVENTS = [
-  { id: 'e1', title: 'FEC Q2 Report Due', date: '2026-06-15', type: 'report', client_id: '', notes: '', state: 'WI' },
-  { id: 'e2', title: 'Primary Election', date: '2026-08-11', type: 'election', client_id: '', notes: 'All WI clients', state: 'WI' },
-  { id: 'e3', title: "Chen birthday", date: '2026-06-03', type: 'birthday', client_id: 'wi-1', notes: '', state: 'WI' },
-  { id: 'e4', title: 'KS Filing Deadline', date: '2026-06-01', type: 'deadline', client_id: '', notes: '', state: 'KS' },
-  { id: 'e5', title: 'KS Primary', date: '2026-08-04', type: 'election', client_id: '', notes: '', state: 'KS' },
-];
-
-// ============================================================
-// APP STATE
+// APP STATE — all data loaded from Supabase on init
 // ============================================================
 let currentState = 'WI';
 let currentTab = 'map';
-let scheduleMonth = new Date(2026, 4, 1); // May 2026
-let calMonth = new Date(2026, 4, 1);
+let scheduleMonth = new Date();
+scheduleMonth = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth(), 1);
+let calMonth = new Date();
+calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
 let selectedClientId = null;
 let mapInstance = null;
 let mapMarkers = {};
-let clients = [...DEMO_CLIENTS];
-let sends = [...DEMO_SENDS];
-let calendarEvents = [...DEMO_EVENTS];
+let clients = [];
+let sends = [];
+let calendarEvents = [];
 let editedTimes = {};
 
 // ============================================================
@@ -447,17 +402,21 @@ let editedTimes = {};
 // ============================================================
 async function sbFetch(path, method = 'GET', body = null) {
   if (!SUPABASE_CONFIGURED) return null;
-  const opts = { method, headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' } };
+  const opts = { method, headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' } };
   if (body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, opts);
-    return r.ok ? await r.json() : null;
-  } catch(e) { return null; }
+    if (!r.ok) { console.error('Supabase error', r.status, await r.text()); return null; }
+    if (method === 'DELETE') return true;
+    const text = await r.text();
+    return text ? JSON.parse(text) : true;
+  } catch(e) { console.error('Supabase fetch error', e); return null; }
 }
 
 async function loadClientsFromSupabase() {
   const data = await sbFetch('clients?select=*&order=name');
-  if (data && data.length) { clients = data; renderAll(); }
+  if (Array.isArray(data)) { clients = data; }
+  renderAll();
 }
 
 async function saveSendTime(sendId, time) {
@@ -611,46 +570,91 @@ function showSidebarList() {
   document.getElementById('sidebar-detail-view').style.display = 'none';
 }
 
-function openClientDetail(id) {
+function openClientDetail(id, editMode = false) {
   selectedClientId = id;
   const c = clients.find(x => x.id === id);
   if (!c) return;
   renderClientList();
   if (mapMarkers[id]) mapMarkers[id].openPopup();
   const detail = document.getElementById('client-detail-content');
-  detail.innerHTML = `
-    <button class="detail-back" onclick="showSidebarList()">&#8592; Back</button>
-    <div class="detail-name">${c.name}</div>
-    <div class="detail-fields">
-      <div class="detail-field"><label>Office</label><span>${c.office}</span></div>
-      <div class="detail-field"><label>District / City</label><span>${c.district}</span></div>
-      <div class="detail-field"><label>PVI</label><span>${c.pvi || '—'}</span></div>
-      <div class="detail-field"><label>Tag</label><span>${c.tag || '—'}</span></div>
-      ${c.monday_board ? `<div class="detail-field"><label>Monday Board</label><span style="font-family:var(--mono);font-size:12px">${c.monday_board}</span></div>` : ''}
-    </div>
-    <div class="form-field" style="margin-bottom:12px">
-      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--mono);display:block;margin-bottom:6px">Notes</label>
-      <textarea class="notes-area" id="notes-field-${id}" rows="5">${c.notes || ''}</textarea>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-sm" onclick="saveNotes('${id}')">Save Notes</button>
-      <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(226,75,74,0.3)" onclick="confirmRemoveClient('${id}')">Remove</button>
-    </div>
-  `;
+
+  if (editMode) {
+    detail.innerHTML = `
+      <button class="detail-back" onclick="openClientDetail('${id}')">&#8592; Cancel</button>
+      <div class="detail-name" style="margin-bottom:16px">Edit: ${c.name}</div>
+      <div class="add-event-form">
+        <div class="form-field"><label>Full Name</label><input type="text" class="form-input" id="edit-name" value="${c.name || ''}"></div>
+        <div class="form-field"><label>Office Type</label>
+          <select class="form-input" id="edit-office">
+            ${['Mayor','State House','State Senate','Congressional','Statewide','Municipal'].map(o => `<option value="${o}" ${c.office === o ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-field"><label>District / City</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}"></div>
+        <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
+        <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="edit-tag" value="${c.tag || ''}"></div>
+        <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="edit-monday" value="${c.monday_board || ''}"></div>
+        <div class="form-field"><label>Notes</label><textarea class="form-input" id="edit-notes" rows="5">${c.notes || ''}</textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary btn-sm" onclick="saveClientEdits('${id}')">Save Changes</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(226,75,74,0.3)" onclick="confirmRemoveClient('${id}')">Remove Client</button>
+      </div>
+    `;
+  } else {
+    detail.innerHTML = `
+      <button class="detail-back" onclick="showSidebarList()">&#8592; Back</button>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+        <div class="detail-name">${c.name}</div>
+        <button class="btn btn-ghost btn-sm" onclick="openClientDetail('${id}', true)">Edit</button>
+      </div>
+      <div class="detail-fields">
+        <div class="detail-field"><label>Office</label><span>${c.office || '—'}</span></div>
+        <div class="detail-field"><label>District / City</label><span>${c.district || '—'}</span></div>
+        <div class="detail-field"><label>PVI</label><span>${c.pvi || '—'}</span></div>
+        <div class="detail-field"><label>Tag</label><span>${c.tag || '—'}</span></div>
+        ${c.monday_board ? `<div class="detail-field"><label>Monday Board</label><span style="font-family:var(--mono);font-size:12px">${c.monday_board}</span></div>` : ''}
+      </div>
+      ${c.notes ? `<div class="form-field" style="margin-top:12px"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--mono);display:block;margin-bottom:6px">Notes</label><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.5">${c.notes}</div></div>` : '<div style="font-size:12px;color:var(--text3);margin-top:12px;font-style:italic">No notes yet. Click Edit to add.</div>'}
+    `;
+  }
   document.getElementById('sidebar-list-view').style.display = 'none';
   document.getElementById('sidebar-detail-view').style.display = '';
 }
 
-function saveNotes(id) {
-  const notes = document.getElementById(`notes-field-${id}`).value;
-  saveClientNotes(id, notes);
-  showToast('Notes saved', 'success');
+async function saveClientEdits(id) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  const name = document.getElementById('edit-name').value.trim();
+  const office = document.getElementById('edit-office').value;
+  const district = document.getElementById('edit-district').value.trim();
+  const pvi = document.getElementById('edit-pvi').value.trim();
+  const tag = document.getElementById('edit-tag').value.trim();
+  const monday_board = document.getElementById('edit-monday').value.trim();
+  const notes = document.getElementById('edit-notes').value.trim();
+  if (!name || !district) { showToast('Name and district are required', 'error'); return; }
+  const updates = { name, office, district, pvi, tag, monday_board, notes };
+  if (SUPABASE_CONFIGURED) {
+    const result = await sbFetch(`clients?id=eq.${id}`, 'PATCH', updates);
+    if (result === null) { showToast('Save failed — check console', 'error'); return; }
+  }
+  Object.assign(c, updates);
+  openClientDetail(id);
+  renderClientList();
+  renderMap();
+  showToast('Client updated', 'success');
 }
 
-function confirmRemoveClient(id) {
+async function confirmRemoveClient(id) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
   if (confirm(`Remove ${c.name} from the system? This cannot be undone.`)) {
+    if (SUPABASE_CONFIGURED) {
+      const result = await sbFetch(`clients?id=eq.${id}`, 'DELETE');
+      if (result === null) {
+        showToast(`Failed to remove ${c.name} — check console`, 'error');
+        return;
+      }
+    }
     clients = clients.filter(x => x.id !== id);
     showSidebarList();
     renderAll();
@@ -940,11 +944,17 @@ async function loadSendsFromSupabase() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  renderAll();
+  // Show loading state before any data arrives — prevents flash of empty or stale content
+  document.getElementById('client-list').innerHTML = '<div class="empty-state" id="loading-msg"><p>Loading clients...</p></div>';
   initMap();
   if (SUPABASE_CONFIGURED) {
     await loadClientsFromSupabase();
     await loadSendsFromSupabase();
+    // Remove loading message if no clients yet
+    const loadingMsg = document.getElementById('loading-msg');
+    if (loadingMsg) loadingMsg.remove();
+  } else {
+    renderAll();
   }
 });
 </script>
