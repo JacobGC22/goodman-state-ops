@@ -109,7 +109,7 @@
   .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
   .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
   .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
-  .send-row { display: grid; grid-template-columns: 160px 90px 90px 1fr 110px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
+  .send-row { display: grid; grid-template-columns: 180px 90px 100px 1fr 110px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
@@ -986,13 +986,18 @@ function renderSchedule() {
             const assignedPeople = s.assigned_people || '';
             const assignedInitials = assignedPeople ? assignedPeople.split(',').map(p => {
               const parts = p.trim().split(' ').filter(Boolean);
-              return parts.map(w => w[0].toUpperCase()).join('');
-            }).map(i => `<span class="assigned-pill">${i}</span>`).join('') : '';
+              // 1 word: use it; 2 words: use last name; 3+ words: use all initials
+              let label;
+              if (parts.length <= 1) label = parts[0] || '';
+              else if (parts.length === 2) label = parts[1];
+              else label = parts.map(w => w[0].toUpperCase()).join('');
+              return `<span class="assigned-pill">${label}</span>`;
+            }).join('') : '';
             return `
               <div style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
                 <div class="send-row">
                   <div class="send-client" style="display:flex;align-items:center;gap:6px;min-width:0">
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${client ? client.name : s.client_name}</span>
+                    <span>${client ? client.name : s.client_name}</span>
                     ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0">${assignedInitials}</span>` : ''}
                   </div>
                   <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
@@ -1204,7 +1209,7 @@ function getSendCalendarEvents() {
     const client = clients.find(c => c.id === s.client_id);
     return {
       id: `send-${s.id}`,
-      title: `${s.client_name} ${s.type === 'email' ? '✉' : '💬'}${s.note ? ' · ' + s.note.slice(0, 30) : ''}`,
+      title: `${s.client_name} ${s.type === 'email' ? '✉' : '📱'}${s.note ? ' · ' + s.note.slice(0, 30) : ''}`,
       date: s.date,
       type: 'send',
       state: client?.state || currentState,
@@ -1569,15 +1574,20 @@ function updateCategoryDatalist() { /* autocomplete-dropdown handles this */ }
 async function loadSendsFromSupabase() {
   const data = await sbFetch('sends?select=*&order=date');
   if (data && data.length) {
-    // Merge into sends array without duplicating
     data.forEach(s => { if (!sends.find(x => x.id === s.id)) sends.push(s); });
   }
-  // Load all saved times into editedTimes so they show immediately
   const times = await sbFetch('send_times?select=*');
   if (times && times.length) {
     times.forEach(t => { if (t.send_time) editedTimes[t.monday_item_id] = t.send_time; });
   }
+  // Populate viewing-as dropdowns now that sends (and assigned_people) are loaded
+  const staffList = getStaffList();
+  ['viewing-as-input', 'cal-viewing-as-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) filterAC(id, id === 'viewing-as-input' ? 'viewing-as-drop' : 'cal-viewing-as-drop', staffList);
+  });
   renderSchedule();
+  renderCalendar();
 }
 
 // ============================================================
