@@ -121,6 +121,10 @@
   .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); }
   .time-input:focus { outline: none; border-color: var(--accent); }
   .time-save-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: var(--mono); }
+  .send-note-wrap { padding: 6px 16px 10px; background: var(--bg3); border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
+  .send-note-input { flex: 1; background: #fff; border: 1px solid #d1d5db; border-radius: 4px; font-family: var(--font); font-size: 12px; padding: 5px 8px; color: var(--text); resize: none; min-height: 32px; }
+  .send-note-input:focus { outline: none; border-color: var(--navy); }
+  .assigned-pill { font-size: 10px; font-family: var(--mono); background: #eef2ff; color: var(--navy); border-radius: 10px; padding: 2px 7px; white-space: nowrap; }
   .time-save-btn:hover { color: var(--green); border-color: var(--green); }
   .conflict-flag { font-family: var(--mono); font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 4px; }
   .no-sends { padding: 12px 16px; color: var(--text3); font-size: 13px; font-style: italic; }
@@ -296,6 +300,17 @@
         <button onclick="changeMonth(1)">&#8594;</button>
       </div>
       <h2 id="schedule-state-label">Wisconsin</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:12px">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">VIEWING AS</span>
+        <div class="autocomplete-wrapper">
+          <input type="text" class="form-input" id="viewing-as-input" value="Everyone" autocomplete="off" style="width:160px;padding:5px 10px;font-size:13px"
+            oninput="filterAC('viewing-as-input','viewing-as-drop',getStaffList())"
+            onfocus="filterAC('viewing-as-input','viewing-as-drop',getStaffList())"
+            onblur="closeACDelayed('viewing-as-drop');applyViewingAs()"
+            onkeydown="handleACKey(event,'viewing-as-drop','viewing-as-input')">
+          <div class="autocomplete-dropdown" id="viewing-as-drop"></div>
+        </div>
+      </div>
       <div class="sync-btn">
         <span class="sync-status" id="sync-status">Configure Monday.com API to enable sync</span>
         <button class="btn btn-ghost btn-sm" onclick="syncMonday()">&#8635; Sync Monday</button>
@@ -317,6 +332,17 @@
         </div>
         <h2 id="calendar-state-label">Wisconsin</h2>
         <button class="btn btn-ghost btn-sm" id="cal-all-states-btn" onclick="toggleCalAllStates()" style="margin-left:auto">Show All States</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">VIEWING AS</span>
+          <div class="autocomplete-wrapper">
+            <input type="text" class="form-input" id="cal-viewing-as-input" value="Everyone" autocomplete="off" style="width:140px;padding:5px 10px;font-size:13px"
+              oninput="filterAC('cal-viewing-as-input','cal-viewing-as-drop',getStaffList())"
+              onfocus="filterAC('cal-viewing-as-input','cal-viewing-as-drop',getStaffList())"
+              onblur="closeACDelayed('cal-viewing-as-drop');applyCalViewingAs()"
+              onkeydown="handleACKey(event,'cal-viewing-as-drop','cal-viewing-as-input')">
+            <div class="autocomplete-dropdown" id="cal-viewing-as-drop"></div>
+          </div>
+        </div>
       </div>
       <div class="cal-grid" id="cal-grid"></div>
     </div>
@@ -513,6 +539,7 @@ let officeTypes = []; // persisted freeform office types
 let activeStates = ['WI', 'KS']; // loaded from Supabase
 let clientSortField = 'name';
 let clientSortDir = 'asc';
+let viewingAs = 'Everyone'; // session filter for schedule and calendar
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
@@ -543,13 +570,39 @@ async function loadClientsFromSupabase() {
 
 async function saveSendTime(sendId, time) {
   if (!SUPABASE_CONFIGURED) { editedTimes[sendId] = time; return true; }
+
+  // Conflict check — was this updated by someone else in last 60 seconds?
   const existing = await sbFetch(`send_times?monday_item_id=eq.${sendId}&select=*`);
+  if (existing && existing.length && existing[0].updated_at) {
+    const lastUpdate = new Date(existing[0].updated_at);
+    const secondsAgo = (Date.now() - lastUpdate.getTime()) / 1000;
+    if (secondsAgo < 60 && existing[0].send_time !== time) {
+      if (!confirm(`This send time was just updated ${Math.round(secondsAgo)}s ago. Overwrite it?`)) return false;
+    }
+  }
+
+  const now = new Date().toISOString();
   if (existing && existing.length) {
-    await sbFetch(`send_times?monday_item_id=eq.${sendId}`, 'PATCH', { send_time: time });
+    await sbFetch(`send_times?monday_item_id=eq.${sendId}`, 'PATCH', { send_time: time, updated_at: now });
   } else {
-    await sbFetch('send_times', 'POST', { monday_item_id: sendId, send_time: time });
+    await sbFetch('send_times', 'POST', { monday_item_id: sendId, send_time: time, updated_at: now });
   }
   editedTimes[sendId] = time;
+
+  // Write back to Monday if we have board context
+  const send = sends.find(s => s.id === sendId || s.monday_id === sendId);
+  if (send) {
+    const client = clients.find(c => c.id === send.client_id);
+    if (client && client.monday_board && send.monday_id) {
+      try {
+        await fetch(MONDAY_EDGE_FN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ action: 'write_send_time', board_id: client.monday_board, monday_item_id: send.monday_id, send_time: time })
+        });
+      } catch(e) { console.warn('Monday write-back failed for send time:', e); }
+    }
+  }
   return true;
 }
 
@@ -883,7 +936,16 @@ function renderSchedule() {
   const today = new Date(); today.setHours(0,0,0,0);
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().slice(0,10);
-  const monthSends = sends.filter(s => s.date.startsWith(monthStr) && clientIds.includes(s.client_id) && s.date >= yesterdayStr);
+  const monthSends = sends.filter(s => {
+    if (!s.date.startsWith(monthStr)) return false;
+    if (!clientIds.includes(s.client_id)) return false;
+    if (s.date < yesterdayStr) return false;
+    if (viewingAs !== 'Everyone' && s.assigned_people) {
+      const names = s.assigned_people.split(',').map(n => n.trim());
+      if (!names.includes(viewingAs)) return false;
+    }
+    return true;
+  });
   const byDay = {};
   monthSends.forEach(s => { if (!byDay[s.date]) byDay[s.date] = []; byDay[s.date].push(s); });
   const sortedDays = Object.keys(byDay).sort();
@@ -920,16 +982,28 @@ function renderSchedule() {
               if (!otherTime) return false;
               return Math.abs(timeToMins(currentTime) - timeToMins(otherTime)) < 60;
             });
+            const currentNote = s.note || '';
+            const assignedPeople = s.assigned_people || '';
+            const assignedPills = assignedPeople ? assignedPeople.split(',').map(p => `<span class="assigned-pill">${p.trim()}</span>`).join(' ') : '';
             return `
-              <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
-                <div class="send-client">${client ? client.name : s.client_name}</div>
-                <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
-                <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
-                <div class="time-input-wrap">
-                  <input type="time" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="--:--">
-                  <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
+              <div style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
+                <div class="send-row">
+                  <div class="send-client">
+                    ${client ? client.name : s.client_name}
+                    ${assignedPills ? `<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap">${assignedPills}</div>` : ''}
+                  </div>
+                  <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
+                  <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
+                  <div class="time-input-wrap">
+                    <input type="time" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="--:--">
+                    <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
+                  </div>
+                  <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${formatTime(currentTime)}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
                 </div>
-                <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${formatTime(currentTime)}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
+                <div class="send-note-wrap">
+                  <textarea class="send-note-input" id="note-${s.id}" rows="1" placeholder="Note (syncs to Monday)">${currentNote}</textarea>
+                  <button class="time-save-btn" onclick="saveNote('${s.id}')">Save</button>
+                </div>
               </div>`;
           }).join('')}
         </div>
@@ -967,7 +1041,58 @@ async function saveTime(sendId) {
   showToast('Time saved', 'success');
 }
 
+async function saveNote(sendId) {
+  const noteEl = document.getElementById(`note-${sendId}`);
+  if (!noteEl) return;
+  const note = noteEl.value;
+
+  // Update in memory
+  const send = sends.find(s => s.id === sendId);
+  if (send) send.note = note;
+
+  // Save to Supabase
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch(`sends?id=eq.${sendId}`, 'PATCH', { note, updated_at: new Date().toISOString() });
+  }
+
+  // Write back to Monday
+  if (send) {
+    const client = clients.find(c => c.id === send.client_id);
+    if (client && client.monday_board && send.monday_id) {
+      try {
+        await fetch(MONDAY_EDGE_FN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ action: 'write_note', board_id: client.monday_board, monday_item_id: send.monday_id, note })
+        });
+      } catch(e) { console.warn('Monday write-back failed for note:', e); }
+    }
+  }
+
+  showToast('Note saved', 'success');
+}
+
 function changeMonth(dir) { scheduleMonth = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + dir, 1); renderSchedule(); }
+
+function getStaffList() {
+  const everyone = 'Everyone';
+  const names = [...new Set(sends.filter(s => s.assigned_people).flatMap(s => s.assigned_people.split(',').map(n => n.trim())))].sort();
+  return [everyone, ...names];
+}
+
+function applyViewingAs() {
+  const input = document.getElementById('viewing-as-input');
+  if (!input) return;
+  viewingAs = input.value.trim() || 'Everyone';
+  renderSchedule();
+}
+
+function applyCalViewingAs() {
+  const input = document.getElementById('cal-viewing-as-input');
+  if (!input) return;
+  viewingAs = input.value.trim() || 'Everyone';
+  renderCalendar();
+}
 
 async function syncMonday() {
   const sc = stateClients().filter(c => c.monday_board);
@@ -1049,6 +1174,34 @@ function getCategoryColor(cat) {
   return categoryColorMap[key];
 }
 
+function getSendCalendarEvents() {
+  // Generate virtual calendar events from synced sends
+  const calSends = sends.filter(s => {
+    if (!s.date) return false;
+    const client = clients.find(c => c.id === s.client_id);
+    if (!client) return false;
+    if (!calShowAllStates && client.state !== currentState) return false;
+    if (viewingAs !== 'Everyone' && s.assigned_people) {
+      const names = s.assigned_people.split(',').map(n => n.trim());
+      if (!names.includes(viewingAs)) return false;
+    }
+    return true;
+  });
+  return calSends.map(s => {
+    const client = clients.find(c => c.id === s.client_id);
+    return {
+      id: `send-${s.id}`,
+      title: `${s.client_name} ${s.type === 'email' ? '✉' : '💬'}${s.note ? ' · ' + s.note.slice(0, 30) : ''}`,
+      date: s.date,
+      type: 'send',
+      state: client?.state || currentState,
+      client_id: s.client_id,
+      notes: s.note || '',
+      _isSend: true,
+    };
+  });
+}
+
 function renderCalendar() {
   const label = document.getElementById('cal-month-label');
   label.textContent = calMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -1057,7 +1210,9 @@ function renderCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-  const stateEvents = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state);
+  const manualEvents = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state);
+  const sendEvents = getSendCalendarEvents();
+  const stateEvents = [...manualEvents, ...sendEvents];
   const grid = document.getElementById('cal-grid');
   let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-day-name">${d}</div>`).join('');
   for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell other-month"></div>`;
@@ -1080,7 +1235,9 @@ function clickCalDay(dateStr) {
 
 function renderUpcomingEvents() {
   const today = new Date().toISOString().slice(0,10);
-  const stateEvents = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
+  const manualUpcoming = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state);
+  const sendUpcoming = getSendCalendarEvents();
+  const stateEvents = [...manualUpcoming, ...sendUpcoming].filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
   const list = document.getElementById('upcoming-events-list');
   if (!stateEvents.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No upcoming events.</div>'; return; }
   list.innerHTML = stateEvents.map(e => {
