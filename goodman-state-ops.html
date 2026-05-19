@@ -318,8 +318,12 @@
           <button class="sort-btn" id="filter-email" onclick="setSendTypeFilter('email')">✉ Email</button>
           <button class="sort-btn" id="filter-text" onclick="setSendTypeFilter('text')">📱 Text</button>
         </div>
-        <button class="btn btn-ghost btn-sm" id="approver-toggle-btn" onclick="toggleApproverFilter()" title="Show only sends with approvers assigned" style="font-size:11px">👤 Approvers</button>
-        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times" style="font-size:11px">⇅ Resort</button>
+        <div style="position:relative">
+          <button class="btn btn-ghost btn-sm" id="approver-toggle-btn" onclick="toggleApproverDropdown()" style="font-size:11px">👤 Approvers</button>
+          <div id="approver-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:6px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:500;min-width:180px;padding:6px 0">
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times, earliest first" style="font-size:11px">⇅ Re-Sort by Time</button>
         <button class="btn btn-ghost btn-sm" id="hide-scheduled-btn" onclick="toggleHideScheduled()" style="font-size:11px">✓ Hide Scheduled</button>
       </div>
       <div class="sync-btn">
@@ -574,6 +578,7 @@ let clientSortDir = 'asc';
 let viewingAs = 'Everyone'; // session filter for schedule and calendar
 let sendTypeFilter = 'all'; // 'all', 'email', 'text'
 let approverFilterOn = false;
+let selectedApprovers = new Set(); // which approvers are checked
 let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
 const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Goodman'];
@@ -1014,9 +1019,9 @@ function renderSchedule() {
       const names = s.assigned_people.split(',').map(n => n.trim());
       if (!names.includes(viewingAs)) return false;
     }
-    if (approverFilterOn && s.assigned_people) {
-      const names = s.assigned_people.split(',').map(n => n.trim());
-      if (!names.some(n => APPROVERS.includes(n))) return false;
+    if (approverFilterOn && selectedApprovers.size > 0) {
+      const names = (s.assigned_people || '').split(',').map(n => n.trim());
+      if (!names.some(n => selectedApprovers.has(n))) return false;
     }
     if (hideScheduled && s.status === 'Scheduled/Sent') return false;
     return true;
@@ -1026,10 +1031,15 @@ function renderSchedule() {
   // Sort each day: emails first then texts, then by saved time, then alphabetical
   Object.keys(byDay).forEach(date => {
     byDay[date].sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
       const ta = timeToMins(editedTimes[a.id] || a.time || '');
       const tb = timeToMins(editedTimes[b.id] || b.time || '');
-      if (ta !== tb && ta !== -999 && tb !== -999) return ta - tb;
+      // If both have times, sort by time ascending (earliest first) regardless of type
+      if (ta !== -999 && tb !== -999) return ta - tb;
+      // If only one has a time, it goes first
+      if (ta !== -999) return -1;
+      if (tb !== -999) return 1;
+      // Neither has a time: emails first, then alphabetical
+      if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
       const na = (clients.find(c => c.id === a.client_id)?.name || a.client_name || '').toLowerCase();
       const nb = (clients.find(c => c.id === b.client_id)?.name || b.client_name || '').toLowerCase();
       return na.localeCompare(nb);
@@ -1215,14 +1225,18 @@ function getStaffList() {
 function applyViewingAs() {
   const input = document.getElementById('viewing-as-input');
   if (!input) return;
-  viewingAs = input.value.trim() || 'Everyone';
+  const val = input.value.trim();
+  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
+  input.value = viewingAs;
   renderSchedule();
 }
 
 function applyCalViewingAs() {
   const input = document.getElementById('cal-viewing-as-input');
   if (!input) return;
-  viewingAs = input.value.trim() || 'Everyone';
+  const val = input.value.trim();
+  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
+  input.value = viewingAs;
   renderCalendar();
 }
 
@@ -1233,10 +1247,47 @@ function setSendTypeFilter(type) {
   renderSchedule();
 }
 
-function toggleApproverFilter() {
-  approverFilterOn = !approverFilterOn;
+function toggleApproverDropdown() {
+  const drop = document.getElementById('approver-dropdown');
+  if (!drop) return;
+  const isOpen = drop.style.display !== 'none';
+  if (isOpen) { drop.style.display = 'none'; return; }
+  // Build checklist
+  drop.innerHTML = APPROVERS.map(name => {
+    const checked = selectedApprovers.has(name);
+    const color = staffColor(name);
+    const initials = name.split(' ').filter(Boolean).map(w => w[0].toUpperCase()).join('');
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:var(--text)" onmouseenter="this.style.background='#eef2ff'" onmouseleave="this.style.background=''">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleApprover('${name.replace(/'/g,"\'")}', this.checked)" style="accent-color:var(--navy)">
+      <span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>
+      <span>${name}</span>
+    </label>`;
+  }).join('') + `<div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px">
+    <button onclick="clearApprovers()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;font-family:var(--mono)">Clear all</button>
+  </div>`;
+  drop.style.display = 'block';
+  // Close on outside click
+  setTimeout(() => {
+    const close = (e) => { if (!drop.contains(e.target) && e.target.id !== 'approver-toggle-btn') { drop.style.display = 'none'; document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 0);
+}
+
+function toggleApprover(name, checked) {
+  if (checked) selectedApprovers.add(name);
+  else selectedApprovers.delete(name);
+  approverFilterOn = selectedApprovers.size > 0;
   const btn = document.getElementById('approver-toggle-btn');
-  if (btn) { btn.style.background = approverFilterOn ? '#eef2ff' : ''; btn.style.color = approverFilterOn ? 'var(--navy)' : ''; }
+  if (btn) { btn.style.background = approverFilterOn ? '#eef2ff' : ''; btn.style.color = approverFilterOn ? 'var(--navy)' : ''; btn.textContent = approverFilterOn ? `👤 Approvers (${selectedApprovers.size})` : '👤 Approvers'; }
+  renderSchedule();
+}
+
+function clearApprovers() {
+  selectedApprovers.clear();
+  approverFilterOn = false;
+  const btn = document.getElementById('approver-toggle-btn');
+  if (btn) { btn.style.background = ''; btn.style.color = ''; btn.textContent = '👤 Approvers'; }
+  document.getElementById('approver-dropdown').style.display = 'none';
   renderSchedule();
 }
 
@@ -1719,6 +1770,9 @@ function selectAC(inputId, dropId, value) {
   const drop = document.getElementById(dropId);
   if (input) input.value = value;
   if (drop) drop.classList.remove('open');
+  // Immediately apply viewing-as filter when a name is selected
+  if (inputId === 'viewing-as-input') { viewingAs = value === 'Everyone' ? 'Everyone' : value; renderSchedule(); }
+  if (inputId === 'cal-viewing-as-input') { viewingAs = value === 'Everyone' ? 'Everyone' : value; renderCalendar(); }
 }
 
 function closeACDelayed(dropId) {
