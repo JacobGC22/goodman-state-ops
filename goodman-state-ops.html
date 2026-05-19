@@ -581,7 +581,7 @@ let approverFilterOn = false;
 let selectedApprovers = new Set(); // which approvers are checked
 let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
-const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Goodman'];
+const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Malinowski'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
@@ -1150,20 +1150,30 @@ function detectConflicts(emailSends) {
 
 function timeToMins(t) {
   if (!t) return -999;
-  // Strip non-numeric/colon chars, parse HH:MM or HHMM
-  const clean = t.replace(/[^0-9:]/g, '');
+  const s = t.trim().toLowerCase();
+  const isPM = s.includes('pm');
+  const isAM = s.includes('am');
+  // Strip everything except digits and colon
+  const clean = s.replace(/[^0-9:]/g, '');
   if (!clean) return -999;
+  let h, m;
   if (clean.includes(':')) {
-    const [h, m] = clean.split(':').map(Number);
-    return isNaN(h) ? -999 : h * 60 + (m || 0);
+    [h, m] = clean.split(':').map(Number);
+  } else if (clean.length >= 3) {
+    // HHMM: 1045 → 10h45m, 930 → 9h30m
+    h = parseInt(clean.slice(0, -2));
+    m = parseInt(clean.slice(-2));
+  } else {
+    // Single or double digit hour: 9, 11
+    h = parseInt(clean);
+    m = 0;
   }
-  // HHMM format: 1115 → 11*60+15
-  if (clean.length >= 3) {
-    const h = parseInt(clean.slice(0, -2));
-    const m = parseInt(clean.slice(-2));
-    return h * 60 + m;
-  }
-  return parseInt(clean) * 60;
+  if (isNaN(h)) return -999;
+  m = m || 0;
+  // Apply AM/PM
+  if (isPM && h !== 12) h += 12;
+  if (isAM && h === 12) h = 0;
+  return h * 60 + m;
 }
 
 async function saveTime(sendId) {
