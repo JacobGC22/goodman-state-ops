@@ -109,7 +109,7 @@
   .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
   .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
   .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
-  .send-row { display: grid; grid-template-columns: 180px 90px 100px 1fr 110px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
+  .send-row { display: grid; grid-template-columns: 180px 80px 90px 120px 1fr 90px; align-items: start; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
@@ -121,8 +121,7 @@
   .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); }
   .time-input:focus { outline: none; border-color: var(--accent); }
   .time-save-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: var(--mono); }
-  .send-note-wrap { padding: 4px 14px 7px; background: var(--bg3); border-top: 1px solid var(--border); display: flex; gap: 6px; align-items: center; }
-  .send-note-input { flex: 1; background: #fff; border: 1px solid #d1d5db; border-radius: 4px; font-family: var(--font); font-size: 12px; padding: 4px 8px; color: var(--text); resize: none; height: 28px; min-height: 28px; }
+  .send-note-input { background: #fff; border: 1px solid #d1d5db; border-radius: 4px; font-family: var(--font); font-size: 12px; padding: 3px 7px; color: var(--text); line-height:1.4; }
   .send-note-input:focus { outline: none; border-color: var(--navy); }
   .assigned-pill { font-size: 10px; font-family: var(--mono); background: #eef2ff; color: var(--navy); border-radius: 3px; padding: 1px 4px; white-space: nowrap; font-weight: 600; }
   .time-save-btn:hover { color: var(--green); border-color: var(--green); }
@@ -349,6 +348,13 @@
       <div class="cal-grid" id="cal-grid"></div>
     </div>
     <div>
+      <div id="cal-send-detail" style="display:none;margin-bottom:16px">
+        <div class="event-panel">
+          <button class="detail-back" onclick="closeCalSendDetail()" style="margin-bottom:12px">&#8592; Back</button>
+          <div id="cal-send-detail-content"></div>
+        </div>
+      </div>
+      <div id="cal-normal-panel">
       <div class="event-panel">
         <h3>Add Event</h3>
         <div class="add-event-form">
@@ -397,6 +403,8 @@
           <div id="upcoming-events-list"></div>
         </div>
       </div>
+    </div>
+      </div><!-- end cal-normal-panel -->
     </div>
   </div>
 </div>
@@ -592,7 +600,8 @@ async function saveSendTime(sendId, time) {
   editedTimes[sendId] = time;
 
   // Write back to Monday if we have board context
-  const send = sends.find(s => s.id === sendId || s.monday_id === sendId);
+  // sendId may be "monday-12345" (s.id format) or "12345" (monday_id format)
+  const send = sends.find(s => s.id === sendId || s.monday_id === sendId || s.monday_id === sendId.replace('monday-', ''));
   if (send) {
     const client = clients.find(c => c.id === send.client_id);
     if (client && client.monday_board && send.monday_id) {
@@ -987,33 +996,30 @@ function renderSchedule() {
             const currentNote = s.note || '';
             const assignedPeople = s.assigned_people || '';
             const assignedInitials = assignedPeople ? assignedPeople.split(',').map(p => {
-              const parts = p.trim().split(' ').filter(Boolean);
-              // 1 word: use it; 2 words: use last name; 3+ words: use all initials
-              let label;
-              if (parts.length <= 1) label = parts[0] || '';
-              else if (parts.length === 2) label = parts[1];
-              else label = parts.map(w => w[0].toUpperCase()).join('');
-              return `<span class="assigned-pill">${label}</span>`;
+              const name = p.trim();
+              const parts = name.split(' ').filter(Boolean);
+              const initials = parts.map(w => w[0].toUpperCase()).join('');
+              const color = staffColor(name);
+              return `<span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>`;
             }).join('') : '';
             return `
-              <div style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
-                <div class="send-row">
-                  <div class="send-client" style="display:flex;align-items:center;gap:6px;min-width:0">
-                    <span>${client ? client.name : s.client_name}</span>
-                    ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0">${assignedInitials}</span>` : ''}
-                  </div>
-                  <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
-                  <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
-                  <div class="time-input-wrap">
-                    <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 10:00 AM">
-                    <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
-                  </div>
-                  <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${currentTime}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
+              <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
+                <div style="display:flex;align-items:flex-start;gap:4px;padding-top:2px">
+                  <span style="font-size:13px;font-weight:500">${client ? client.name : s.client_name}</span>
+                  ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0;padding-top:1px">${assignedInitials}</span>` : ''}
                 </div>
-                <div class="send-note-wrap">
-                  <textarea class="send-note-input" id="note-${s.id}" rows="1" placeholder="Note (syncs to Monday)">${currentNote}</textarea>
-                  <button class="time-save-btn" onclick="saveNote('${s.id}')">Save</button>
+                <div class="send-type ${s.type}" style="padding-top:2px">${s.type === 'email' ? '✉ Email' : '📱 Text'}</div>
+                <div class="send-item-name" style="padding-top:2px">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠</span>' : ''}</div>
+                <div class="time-input-wrap">
+                  <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 1030">
+                  <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
                 </div>
+                <div>
+                  <textarea class="send-note-input" id="note-${s.id}" placeholder="Note (syncs to Monday)"
+                    style="width:100%;min-height:26px;height:26px;overflow:hidden;resize:none;"
+                    oninput="this.style.height='26px';this.style.height=this.scrollHeight+'px'">${currentNote}</textarea>
+                </div>
+                <button class="time-save-btn" onclick="saveNote('${s.id}')" style="align-self:flex-start;margin-top:2px">Save</button>
               </div>`;
           }).join('')}
         </div>
@@ -1044,16 +1050,20 @@ function detectConflicts(emailSends) {
 
 function timeToMins(t) {
   if (!t) return -999;
-  // Handle both "10:00 AM" and "10:00" formats
-  const ampm = t.match(/([ap]m)/i);
-  const parts = t.replace(/[apm\s]/gi, '').split(':').map(Number);
-  if (isNaN(parts[0])) return -999;
-  let h = parts[0], m = parts[1] || 0;
-  if (ampm) {
-    if (ampm[0].toLowerCase() === 'pm' && h !== 12) h += 12;
-    if (ampm[0].toLowerCase() === 'am' && h === 12) h = 0;
+  // Strip non-numeric/colon chars, parse HH:MM or HHMM
+  const clean = t.replace(/[^0-9:]/g, '');
+  if (!clean) return -999;
+  if (clean.includes(':')) {
+    const [h, m] = clean.split(':').map(Number);
+    return isNaN(h) ? -999 : h * 60 + (m || 0);
   }
-  return h * 60 + m;
+  // HHMM format: 1115 → 11*60+15
+  if (clean.length >= 3) {
+    const h = parseInt(clean.slice(0, -2));
+    const m = parseInt(clean.slice(-2));
+    return h * 60 + m;
+  }
+  return parseInt(clean) * 60;
 }
 
 async function saveTime(sendId) {
@@ -1095,6 +1105,14 @@ async function saveNote(sendId) {
 }
 
 function changeMonth(dir) { scheduleMonth = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + dir, 1); renderSchedule(); }
+
+const STAFF_COLOR_POOL = ['#1e3a8a','#be185d','#0d7a5f','#b45309','#6d28d9','#0369a1','#9a3412','#065f46','#7c3aed','#b91c1c','#0e7490','#4d7c0f'];
+function staffColor(name) {
+  // Deterministic hash from name string → consistent color every session
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) { hash = (hash * 31 + name.charCodeAt(i)) >>> 0; }
+  return STAFF_COLOR_POOL[hash % STAFF_COLOR_POOL.length];
+}
 
 function getStaffList() {
   const everyone = 'Everyone';
@@ -1223,22 +1241,23 @@ function getSendCalendarEvents() {
   });
   return calSends.map(s => {
     const client = clients.find(c => c.id === s.client_id);
+    const parts = (client ? client.name : s.client_name).split(' ').filter(Boolean);
+    let displayName;
+    if (parts.length <= 1) displayName = parts[0] || s.client_name;
+    else if (parts.length === 2) displayName = parts[1];
+    else displayName = parts.map(w => w[0].toUpperCase()).join('');
     return {
       id: `send-${s.id}`,
-      title: (() => {
-        const parts = (client ? client.name : s.client_name).split(' ').filter(Boolean);
-        let displayName;
-        if (parts.length <= 1) displayName = parts[0] || s.client_name;
-        else if (parts.length === 2) displayName = parts[1];
-        else displayName = parts.map(w => w[0].toUpperCase()).join('');
-        return `${displayName} ${s.type === 'email' ? '✉' : '📱'}${s.note ? ' · ' + s.note.slice(0, 25) : ''}`;
-      })(),
+      title: `${displayName} ${s.type === 'email' ? '✉' : '📱'}`,
       date: s.date,
       type: 'send',
       state: client?.state || currentState,
       client_id: s.client_id,
       notes: s.note || '',
       _isSend: true,
+      _sendId: s.id,
+      _sendRef: s,
+      _clientRef: client,
     };
   });
 }
@@ -1263,7 +1282,10 @@ function renderCalendar() {
     const dayEvents = stateEvents.filter(e => e.date === dateStr);
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="clickCalDay('${dateStr}')">
       <div class="cal-date">${d}</div>
-      ${dayEvents.map(e => `<div class="cal-event" style="background:${getCategoryColor(e.type)}20;color:${getCategoryColor(e.type)};border-left:3px solid ${getCategoryColor(e.type)}" title="${e.title}" onclick="event.stopPropagation()">${e.title}</div>`).join('')}
+      ${dayEvents.map(e => e._isSend
+        ? `<div class="cal-event" style="background:${getCategoryColor(e.type)}20;color:${getCategoryColor(e.type)};border-left:3px solid ${getCategoryColor(e.type)};cursor:pointer" title="${e.title}" onclick="event.stopPropagation();openCalSendDetail('${e._sendId}')">${e.title}</div>`
+        : `<div class="cal-event" style="background:${getCategoryColor(e.type)}20;color:${getCategoryColor(e.type)};border-left:3px solid ${getCategoryColor(e.type)}" title="${e.title}" onclick="event.stopPropagation()">${e.title}</div>`
+      ).join('')}
     </div>`;
   }
   grid.innerHTML = html;
@@ -1272,6 +1294,42 @@ function renderCalendar() {
 
 function clickCalDay(dateStr) {
   document.getElementById('evt-date').value = dateStr;
+  closeCalSendDetail();
+}
+
+function openCalSendDetail(sendId) {
+  const s = sends.find(x => x.id === sendId);
+  if (!s) return;
+  const client = clients.find(c => c.id === s.client_id);
+  const d = new Date(s.date + 'T12:00:00');
+  const dateLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' });
+  const time = editedTimes[s.id] || s.time || '';
+  const assignedPeople = s.assigned_people || '';
+  const assignedHtml = assignedPeople ? assignedPeople.split(',').map(p => {
+    const name = p.trim();
+    const initials = name.split(' ').filter(Boolean).map(w => w[0].toUpperCase()).join('');
+    const color = staffColor(name);
+    return `<span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>`;
+  }).join(' ') : '<span style="color:var(--text3);font-size:12px">Unassigned</span>';
+
+  document.getElementById('cal-send-detail-content').innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">${client ? client.name : s.client_name}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;font-family:var(--mono)">${s.item_name}</div>
+    <div class="detail-fields" style="margin-bottom:12px">
+      <div class="detail-field"><label>Date</label><span>${dateLabel}</span></div>
+      <div class="detail-field"><label>Type</label><span>${s.type === 'email' ? '✉ Email' : '📱 Text'}</span></div>
+      ${time ? `<div class="detail-field"><label>Send Time</label><span style="font-family:var(--mono)">${time}</span></div>` : ''}
+      <div class="detail-field"><label>Assigned</label><span>${assignedHtml}</span></div>
+    </div>
+    ${s.note ? `<div class="detail-field"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--mono);display:block;margin-bottom:6px">Note</label><div style="font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.5;background:var(--bg3);padding:10px;border-radius:4px">${s.note}</div></div>` : '<div style="font-size:12px;color:var(--text3);font-style:italic">No note for this send.</div>'}
+  `;
+  document.getElementById('cal-send-detail').style.display = 'block';
+  document.getElementById('cal-normal-panel').style.display = 'none';
+}
+
+function closeCalSendDetail() {
+  document.getElementById('cal-send-detail').style.display = 'none';
+  document.getElementById('cal-normal-panel').style.display = 'block';
 }
 
 function renderUpcomingEvents() {
