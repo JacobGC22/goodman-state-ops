@@ -124,7 +124,6 @@
   .time-save-btn:hover { color: var(--green); border-color: var(--green); }
   .conflict-flag { font-family: var(--mono); font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 4px; }
   .no-sends { padding: 12px 16px; color: var(--text3); font-size: 13px; font-style: italic; }
-  .overlap-warning { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 4px; padding: 8px 12px; margin: 8px 16px; font-size: 12px; color: #92400e; font-family: var(--mono); }
 
   /* CALENDAR TAB */
   .calendar-layout { padding: 24px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; min-height: calc(100vh - 100px); }
@@ -221,9 +220,10 @@
 <div class="header">
   <div class="header-left">
     <div class="logo">Goodman Campaigns / <span>State Ops</span></div>
-    <div class="state-tabs">
+    <div class="state-tabs" id="state-tabs-container">
       <button class="state-tab active" onclick="switchState('WI')">Wisconsin</button>
       <button class="state-tab" onclick="switchState('KS')">Kansas</button>
+      <button class="state-tab" onclick="openAddState()" style="border-style:dashed;opacity:0.7">+ State</button>
     </div>
   </div>
   <button class="btn btn-ghost btn-sm" onclick="openAddClient()">+ Add Client</button>
@@ -237,8 +237,11 @@
 
 <!-- MAP TAB -->
 <div id="panel-map" class="panel active">
-  <div class="map-layout">
+  <div class="map-layout" style="position:relative">
     <div id="map"></div>
+    <div id="shapefile-warning" style="display:none;position:absolute;top:10px;left:10px;z-index:1000;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400e;max-width:300px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+      ⚠ No district centroids loaded for <strong id="shapefile-warning-state"></strong>. City/county pins will work but legislative districts won't resolve. <a href="#" onclick="openShapefileUpload(event)" style="color:#1e3a8a;text-decoration:underline">Upload GeoJSON</a>
+    </div>
     <div class="map-sidebar">
       <div id="sidebar-list-view">
         <div class="sidebar-header">
@@ -295,6 +298,7 @@
           <button onclick="changeCalMonth(1)">&#8594;</button>
         </div>
         <h2 id="calendar-state-label">Wisconsin</h2>
+        <button class="btn btn-ghost btn-sm" id="cal-all-states-btn" onclick="toggleCalAllStates()" style="margin-left:auto">Show All States</button>
       </div>
       <div class="cal-grid" id="cal-grid"></div>
     </div>
@@ -392,6 +396,71 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- ADD STATE MODAL -->
+<div class="modal-overlay" id="add-state-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <span class="modal-title">Add State</span>
+      <button class="modal-close" onclick="closeAddState()">&times;</button>
+    </div>
+    <div class="add-event-form">
+      <div class="form-field">
+        <label>State Abbreviation</label>
+        <input type="text" class="form-input" id="new-state-abbr" placeholder="e.g. PA" maxlength="2" style="text-transform:uppercase">
+      </div>
+      <div class="form-field">
+        <label>State Name</label>
+        <input type="text" class="form-input" id="new-state-name" placeholder="e.g. Pennsylvania">
+      </div>
+      <div class="form-field">
+        <label>Capital Latitude</label>
+        <input type="text" class="form-input" id="new-state-lat" placeholder="e.g. 40.2697">
+      </div>
+      <div class="form-field">
+        <label>Capital Longitude</label>
+        <input type="text" class="form-input" id="new-state-lng" placeholder="e.g. -76.8756">
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:8px 10px;font-size:12px;color:#92400e;font-family:var(--mono)">
+        ⚠ District pins won't work until you upload shapefiles. After adding the state, use "Re-geocode All" after uploading GeoJSON via the map view.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAddState()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewState()">Add State</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHAPEFILE UPLOAD MODAL -->
+<div class="modal-overlay" id="shapefile-modal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <span class="modal-title">Upload District Shapefiles</span>
+      <button class="modal-close" onclick="closeShapefileModal()">&times;</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload GeoJSON files for <strong id="shapefile-modal-state"></strong> legislative districts. Download from your state's GIS hub as GeoJSON.</p>
+    <div class="add-event-form">
+      <div class="form-field">
+        <label>House / Assembly Districts GeoJSON</label>
+        <input type="file" class="form-input" id="shapefile-house" accept=".geojson,.json">
+      </div>
+      <div class="form-field">
+        <label>Senate Districts GeoJSON</label>
+        <input type="file" class="form-input" id="shapefile-senate" accept=".geojson,.json">
+      </div>
+      <div class="form-field">
+        <label>Congressional Districts GeoJSON (optional)</label>
+        <input type="file" class="form-input" id="shapefile-congress" accept=".geojson,.json">
+      </div>
+      <div id="shapefile-status" style="font-family:var(--mono);font-size:12px;color:var(--text2);min-height:20px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeShapefileModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="processShapefiles()">Process & Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
@@ -423,6 +492,9 @@ let calendarEvents = [];
 let editedTimes = {};
 let eventCategories = []; // persisted freeform categories
 let officeTypes = []; // persisted freeform office types
+let activeStates = ['WI', 'KS']; // loaded from Supabase
+const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
+const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
 // ============================================================
 // SUPABASE HELPERS (no-op if not configured)
@@ -492,7 +564,7 @@ async function deleteCalendarEvent(evtId) {
 // ============================================================
 function switchState(state) {
   currentState = state;
-  document.querySelectorAll('.state-tab').forEach(t => t.classList.toggle('active', t.textContent === (state === 'WI' ? 'Wisconsin' : 'Kansas')));
+  renderStateTabs();
   document.getElementById('sidebar-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
   document.getElementById('schedule-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
   document.getElementById('calendar-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
@@ -508,6 +580,7 @@ function switchTab(tab) {
   document.getElementById(`panel-${tab}`).classList.add('active');
   if (tab === 'map' && !mapInstance) initMap();
   else if (tab === 'map') { setTimeout(() => mapInstance && mapInstance.invalidateSize(), 50); renderMap(); }
+  if (tab === 'map') checkShapefileWarning();
   if (tab === 'schedule') renderSchedule();
   if (tab === 'calendar') renderCalendar();
 }
@@ -726,37 +799,51 @@ function renderSchedule() {
   const sc = stateClients();
   const clientIds = sc.map(c => c.id);
   const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
-  const monthSends = sends.filter(s => s.date.startsWith(monthStr) && clientIds.includes(s.client_id));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0,10);
+  const monthSends = sends.filter(s => s.date.startsWith(monthStr) && clientIds.includes(s.client_id) && s.date >= yesterdayStr);
   const byDay = {};
   monthSends.forEach(s => { if (!byDay[s.date]) byDay[s.date] = []; byDay[s.date].push(s); });
   const sortedDays = Object.keys(byDay).sort();
   const content = document.getElementById('schedule-content');
+  // Clients without Monday board linked
+  const unlinked = sc.filter(c => !c.monday_board);
+  const unlinkedHtml = unlinked.length ? `
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">
+      <strong>No Monday board linked:</strong> ${unlinked.map(c => c.name).join(', ')}
+      <span style="color:#b45309;margin-left:6px;font-family:var(--mono)">— add board IDs to include in sync</span>
+    </div>` : '';
   if (!sortedDays.length) {
-    content.innerHTML = `<div class="empty-state"><p>No sends found for ${scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p><p style="font-size:12px;color:var(--text3);margin-top:4px">Sync Monday.com or sends will appear here as they're added.</p></div>`;
+    content.innerHTML = unlinkedHtml + `<div class="empty-state"><p>No sends found for ${scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p><p style="font-size:12px;color:var(--text3);margin-top:4px">Sync Monday.com or sends will appear here as they're added.</p></div>`;
     return;
   }
-  content.innerHTML = sortedDays.map(date => {
+  content.innerHTML = unlinkedHtml + sortedDays.map(date => {
     const daySends = byDay[date];
     const d = new Date(date + 'T12:00:00');
     const dayLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' });
-    const emailSends = daySends.filter(s => s.type === 'email');
-    const conflicts = detectConflicts(emailSends);
     return `
       <div class="schedule-day-block">
         <div class="schedule-day-header">
           <span class="day-label">${dayLabel}</span>
           <span class="send-count-badge">${daySends.length} send${daySends.length !== 1 ? 's' : ''}</span>
         </div>
-        ${conflicts.length ? `<div class="overlap-warning">⚠ Possible time overlap: ${conflicts.join(', ')} — check send times below</div>` : ''}
         <div class="schedule-sends">
           ${daySends.map(s => {
             const currentTime = editedTimes[s.id] || s.time || '';
             const client = clients.find(c => c.id === s.client_id);
+            const hasConflict = currentTime && daySends.some(other => {
+              if (other.id === s.id) return false;
+              if (other.type !== s.type) return false;
+              const otherTime = editedTimes[other.id] || other.time || '';
+              if (!otherTime) return false;
+              return Math.abs(timeToMins(currentTime) - timeToMins(otherTime)) < 60;
+            });
             return `
-              <div class="send-row">
+              <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
                 <div class="send-client">${client ? client.name : s.client_name}</div>
                 <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
-                <div class="send-item-name">${s.item_name}</div>
+                <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
                 <div class="time-input-wrap">
                   <input type="time" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="--:--">
                   <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
@@ -810,15 +897,21 @@ async function syncMonday() {
     const year = scheduleMonth.getFullYear();
     const month = scheduleMonth.toLocaleString('default', { month: 'long' });
     const groupTarget = `${month} ${year}`;
+    // Also check next month in case group exists
+    const nextMonthDate = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + 1, 1);
+    const nextMonthTarget = `${nextMonthDate.toLocaleString('default', { month: 'long' })} ${nextMonthDate.getFullYear()}`;
+    const groupTargets = [groupTarget, nextMonthTarget];
     const results = [];
     for (const client of sc) {
-      const res = await fetch(MONDAY_EDGE_FN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ board_id: client.monday_board, group_target: groupTarget, client_id: client.id, client_name: client.name.split(' ')[1] || client.name })
-      });
-      const data = await res.json();
-      if (data.sends) results.push(...data.sends);
+      for (const target of groupTargets) {
+        const res = await fetch(MONDAY_EDGE_FN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ board_id: client.monday_board, group_target: target, client_id: client.id, client_name: client.name.split(' ')[1] || client.name })
+        });
+        const data = await res.json();
+        if (data.sends && data.sends.length) results.push(...data.sends);
+      }
     }
     // Save new sends to Supabase; update date if changed but never overwrite a saved time
     let savedCount = 0;
@@ -853,6 +946,14 @@ async function syncMonday() {
 // ============================================================
 // CALENDAR
 // ============================================================
+let calShowAllStates = false;
+
+function toggleCalAllStates() {
+  calShowAllStates = !calShowAllStates;
+  const btn = document.getElementById('cal-all-states-btn');
+  if (btn) btn.textContent = calShowAllStates ? 'Current State Only' : 'Show All States';
+  renderCalendar();
+}
 const PRESET_COLORS = { deadline: '#b91c1c', birthday: '#6d28d9', election: '#b45309', report: '#0d7a5f', send: '#1e3a8a', other: '#6b7280' };
 const COLOR_POOL = ['#1e3a8a','#b91c1c','#0d7a5f','#b45309','#6d28d9','#0369a1','#9a3412','#065f46','#92400e','#5b21b6'];
 const categoryColorMap = {};
@@ -875,7 +976,7 @@ function renderCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-  const stateEvents = calendarEvents.filter(e => e.state === currentState || e.state === 'both' || !e.state);
+  const stateEvents = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state);
   const grid = document.getElementById('cal-grid');
   let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-day-name">${d}</div>`).join('');
   for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell other-month"></div>`;
@@ -898,7 +999,7 @@ function clickCalDay(dateStr) {
 
 function renderUpcomingEvents() {
   const today = new Date().toISOString().slice(0,10);
-  const stateEvents = calendarEvents.filter(e => e.state === currentState || e.state === 'both' || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
+  const stateEvents = calendarEvents.filter(e => calShowAllStates || e.state === currentState || e.state === 'both' || !e.state).filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
   const list = document.getElementById('upcoming-events-list');
   if (!stateEvents.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">No upcoming events.</div>'; return; }
   list.innerHTML = stateEvents.map(e => {
@@ -1215,11 +1316,124 @@ async function loadSendsFromSupabase() {
   renderSchedule();
 }
 
+// ============================================================
+// STATE MANAGEMENT
+// ============================================================
+function renderStateTabs() {
+  const container = document.getElementById('state-tabs-container');
+  if (!container) return;
+  container.innerHTML = activeStates.map(s =>
+    `<button class="state-tab ${s === currentState ? 'active' : ''}" onclick="switchState('${s}')">${STATE_NAMES[s] || s}</button>`
+  ).join('') + `<button class="state-tab" onclick="openAddState()" style="border-style:dashed;opacity:0.7">+ State</button>`;
+}
+
+function checkShapefileWarning() {
+  const warning = document.getElementById('shapefile-warning');
+  const warningState = document.getElementById('shapefile-warning-state');
+  if (!warning) return;
+  if (!STATES_WITH_CENTROIDS.includes(currentState)) {
+    warningState.textContent = STATE_NAMES[currentState] || currentState;
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+function openAddState() { document.getElementById('add-state-modal').classList.add('open'); }
+function closeAddState() { document.getElementById('add-state-modal').classList.remove('open'); }
+
+async function saveNewState() {
+  const abbr = document.getElementById('new-state-abbr').value.trim().toUpperCase();
+  const name = document.getElementById('new-state-name').value.trim();
+  const lat = parseFloat(document.getElementById('new-state-lat').value);
+  const lng = parseFloat(document.getElementById('new-state-lng').value);
+  if (!abbr || !name) { showToast('Abbreviation and name are required', 'error'); return; }
+  if (activeStates.includes(abbr)) { showToast(`${abbr} is already added`, 'error'); return; }
+  STATE_NAMES[abbr] = name;
+  if (!isNaN(lat) && !isNaN(lng)) CAPITALS[abbr] = [lat, lng];
+  activeStates.push(abbr);
+  if (SUPABASE_CONFIGURED) {
+    await sbFetch('states', 'POST', { id: abbr, name, capital_lat: lat || null, capital_lng: lng || null });
+  }
+  closeAddState();
+  renderStateTabs();
+  switchState(abbr);
+  showToast(`${name} added`, 'success');
+}
+
+async function loadStatesFromSupabase() {
+  const data = await sbFetch('states?select=*&order=name');
+  if (Array.isArray(data) && data.length) {
+    data.forEach(s => {
+      if (!activeStates.includes(s.id)) activeStates.push(s.id);
+      STATE_NAMES[s.id] = s.name;
+      if (s.capital_lat && s.capital_lng) CAPITALS[s.id] = [s.capital_lat, s.capital_lng];
+    });
+    renderStateTabs();
+  }
+}
+
+// Shapefile upload
+function openShapefileUpload(e) {
+  e.preventDefault();
+  document.getElementById('shapefile-modal-state').textContent = STATE_NAMES[currentState] || currentState;
+  document.getElementById('shapefile-modal').classList.add('open');
+}
+function closeShapefileModal() { document.getElementById('shapefile-modal').classList.remove('open'); }
+
+async function processShapefiles() {
+  const status = document.getElementById('shapefile-status');
+  const houseFile = document.getElementById('shapefile-house').files[0];
+  const senateFile = document.getElementById('shapefile-senate').files[0];
+  const congressFile = document.getElementById('shapefile-congress').files[0];
+  if (!houseFile && !senateFile) { showToast('Upload at least one GeoJSON file', 'error'); return; }
+  status.textContent = 'Processing...';
+  const results = [];
+  const processFile = async (file, suffix) => {
+    if (!file) return;
+    const text = await file.text();
+    const geojson = JSON.parse(text);
+    const centroids = {};
+    geojson.features.forEach(f => {
+      // Find district number from common property names
+      const props = f.properties || {};
+      const numProp = ['SLDLST','SLDUST','DISTRICT','DISTRICTNO','CD_NUM','CON2021','NAME'].find(k => props[k] !== undefined);
+      if (!numProp) return;
+      const num = parseInt(props[numProp]);
+      if (isNaN(num)) return;
+      // Compute centroid from bounding box as approximation
+      const coords = f.geometry?.coordinates;
+      if (!coords) return;
+      const flat = coords.flat(Infinity);
+      const lngs = flat.filter((_,i) => i%2===0);
+      const lats = flat.filter((_,i) => i%2===1);
+      if (!lats.length) return;
+      const lat = lats.reduce((a,b)=>a+b,0)/lats.length;
+      const lng = lngs.reduce((a,b)=>a+b,0)/lngs.length;
+      centroids[num] = [Math.round(lat*10000)/10000, Math.round(lng*10000)/10000];
+    });
+    const key = `${currentState}_${suffix}`;
+    DISTRICT_CENTROIDS[key] = centroids;
+    if (SUPABASE_CONFIGURED) {
+      await sbFetch('state_centroids', 'POST', { id: key, state: currentState, type: suffix, centroids: JSON.stringify(centroids) });
+    }
+    results.push(`${key}: ${Object.keys(centroids).length} districts`);
+  };
+  await processFile(houseFile, 'HD');
+  await processFile(senateFile, 'SD');
+  await processFile(congressFile, 'CD');
+  if (!STATES_WITH_CENTROIDS.includes(currentState)) STATES_WITH_CENTROIDS.push(currentState);
+  status.textContent = 'Done: ' + results.join(', ');
+  checkShapefileWarning();
+  showToast('Shapefiles processed', 'success');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Show loading state before any data arrives — prevents flash of empty or stale content
   document.getElementById('client-list').innerHTML = '<div class="empty-state" id="loading-msg"><p>Loading clients...</p></div>';
   initMap();
   if (SUPABASE_CONFIGURED) {
+    await loadStatesFromSupabase();
     await loadClientsFromSupabase();
     await loadSendsFromSupabase();
     await loadCalendarEventsFromSupabase();
