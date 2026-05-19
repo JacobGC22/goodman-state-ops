@@ -1176,7 +1176,6 @@ async function syncMonday() {
       if (!existing) {
         const client = clients.find(c => c.id === s.client_id);
         s.state = client ? client.state : currentState;
-        // Remove time field — send times live in send_times table, not sends
         const { time: _t, ...sendToSave } = s;
         const saved = await sbFetch('sends', 'POST', sendToSave);
         if (saved !== null) { sends.push(s); savedCount++; }
@@ -1189,6 +1188,21 @@ async function syncMonday() {
           await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', updates);
           Object.assign(existing, updates);
           updatedCount++;
+        }
+      }
+      // Sync send time from Monday → send_times (always overwrite, Monday is source of truth on sync)
+      if (s.time) {
+        const sendId = s.id;
+        const existingTime = await sbFetch(`send_times?monday_item_id=eq.${sendId}&select=send_time`);
+        const mondayTime = s.time;
+        if (existingTime && existingTime.length) {
+          if (existingTime[0].send_time !== mondayTime) {
+            await sbFetch(`send_times?monday_item_id=eq.${sendId}`, 'PATCH', { send_time: mondayTime, updated_at: new Date().toISOString() });
+            editedTimes[sendId] = mondayTime;
+          }
+        } else {
+          await sbFetch('send_times', 'POST', { monday_item_id: sendId, send_time: mondayTime, updated_at: new Date().toISOString() });
+          editedTimes[sendId] = mondayTime;
         }
       }
       // Never touch send_times here — staff-saved times are preserved
