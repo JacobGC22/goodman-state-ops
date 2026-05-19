@@ -109,7 +109,7 @@
   .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
   .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
   .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
-  .send-row { display: grid; grid-template-columns: 200px 120px 80px 1fr 140px; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .send-row { display: grid; grid-template-columns: 160px 90px 90px 1fr 110px; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
@@ -121,10 +121,10 @@
   .time-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; width: 90px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); }
   .time-input:focus { outline: none; border-color: var(--accent); }
   .time-save-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-family: var(--mono); }
-  .send-note-wrap { padding: 6px 16px 10px; background: var(--bg3); border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
-  .send-note-input { flex: 1; background: #fff; border: 1px solid #d1d5db; border-radius: 4px; font-family: var(--font); font-size: 12px; padding: 5px 8px; color: var(--text); resize: none; min-height: 32px; }
+  .send-note-wrap { padding: 4px 14px 7px; background: var(--bg3); border-top: 1px solid var(--border); display: flex; gap: 6px; align-items: center; }
+  .send-note-input { flex: 1; background: #fff; border: 1px solid #d1d5db; border-radius: 4px; font-family: var(--font); font-size: 12px; padding: 4px 8px; color: var(--text); resize: none; height: 28px; min-height: 28px; }
   .send-note-input:focus { outline: none; border-color: var(--navy); }
-  .assigned-pill { font-size: 10px; font-family: var(--mono); background: #eef2ff; color: var(--navy); border-radius: 10px; padding: 2px 7px; white-space: nowrap; }
+  .assigned-pill { font-size: 10px; font-family: var(--mono); background: #eef2ff; color: var(--navy); border-radius: 3px; padding: 1px 4px; white-space: nowrap; font-weight: 600; }
   .time-save-btn:hover { color: var(--green); border-color: var(--green); }
   .conflict-flag { font-family: var(--mono); font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 4px; }
   .no-sends { padding: 12px 16px; color: var(--text3); font-size: 13px; font-style: italic; }
@@ -984,13 +984,16 @@ function renderSchedule() {
             });
             const currentNote = s.note || '';
             const assignedPeople = s.assigned_people || '';
-            const assignedPills = assignedPeople ? assignedPeople.split(',').map(p => `<span class="assigned-pill">${p.trim()}</span>`).join(' ') : '';
+            const assignedInitials = assignedPeople ? assignedPeople.split(',').map(p => {
+              const parts = p.trim().split(' ').filter(Boolean);
+              return parts.map(w => w[0].toUpperCase()).join('');
+            }).map(i => `<span class="assigned-pill">${i}</span>`).join('') : '';
             return `
               <div style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
                 <div class="send-row">
-                  <div class="send-client">
-                    ${client ? client.name : s.client_name}
-                    ${assignedPills ? `<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap">${assignedPills}</div>` : ''}
+                  <div class="send-client" style="display:flex;align-items:center;gap:6px;min-width:0">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${client ? client.name : s.client_name}</span>
+                    ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0">${assignedInitials}</span>` : ''}
                   </div>
                   <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
                   <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
@@ -1107,38 +1110,46 @@ async function syncMonday() {
     const nextMonthDate = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + 1, 1);
     const nextMonthTarget = `${nextMonthDate.toLocaleString('default', { month: 'long' })} ${nextMonthDate.getFullYear()}`;
     const groupTargets = [groupTarget, nextMonthTarget];
-    const results = [];
-    for (const client of sc) {
-      for (const target of groupTargets) {
-        const res = await fetch(MONDAY_EDGE_FN, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-          body: JSON.stringify({ board_id: client.monday_board, group_target: target, client_id: client.id, client_name: client.name.split(' ')[1] || client.name })
-        });
-        const data = await res.json();
-        if (data.sends && data.sends.length) results.push(...data.sends);
-      }
-    }
-    // Save new sends to Supabase; update date if changed but never overwrite a saved time
+    // Run all client syncs in parallel — one call per client covering both month targets
+    document.getElementById('sync-status').textContent = `Syncing ${sc.length} clients...`;
+    const allFetches = sc.map(client =>
+      fetch(MONDAY_EDGE_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          board_id: client.monday_board,
+          group_targets: groupTargets,
+          client_id: client.id,
+          client_name: client.name.split(' ')[1] || client.name
+        })
+      }).then(r => r.json()).catch(e => { console.warn(`Sync failed for ${client.name}:`, e); return { sends: [] }; })
+    );
+    const allResults = await Promise.all(allFetches);
+    const results = allResults.flatMap(r => r.sends || []);
+    // Save to Supabase in parallel
     let savedCount = 0;
     let updatedCount = 0;
-    for (const s of results) {
+    const saveOps = results.map(async s => {
       const existing = sends.find(x => x.monday_id === s.monday_id);
       if (!existing) {
-        // New send — add state field from client
         const client = clients.find(c => c.id === s.client_id);
         s.state = client ? client.state : currentState;
-        await sbFetch('sends', 'POST', s);
-        sends.push(s);
-        savedCount++;
-      } else if (existing.date !== s.date) {
-        // Date changed on Monday side — update date only
-        await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', { date: s.date });
-        existing.date = s.date;
-        updatedCount++;
+        const saved = await sbFetch('sends', 'POST', s);
+        if (saved !== null) { sends.push(s); savedCount++; }
+      } else {
+        const updates = {};
+        if (existing.date !== s.date) updates.date = s.date;
+        if (s.note !== undefined && s.note !== existing.note) updates.note = s.note;
+        if (s.assigned_people !== undefined && s.assigned_people !== existing.assigned_people) updates.assigned_people = s.assigned_people;
+        if (Object.keys(updates).length) {
+          await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', updates);
+          Object.assign(existing, updates);
+          updatedCount++;
+        }
       }
       // Never touch send_times here — staff-saved times are preserved
-    }
+    });
+    await Promise.all(saveOps);
     document.getElementById('sync-status').textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
     renderSchedule();
     const msg = savedCount > 0 ? `Synced ${savedCount} new item${savedCount !== 1 ? 's' : ''}${updatedCount > 0 ? `, updated ${updatedCount}` : ''}` : updatedCount > 0 ? `Updated ${updatedCount} date${updatedCount !== 1 ? 's' : ''}` : 'Already up to date';
