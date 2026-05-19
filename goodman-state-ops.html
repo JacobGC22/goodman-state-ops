@@ -196,6 +196,14 @@
   .empty-state p { font-size: 14px; margin-bottom: 8px; }
 
   .config-note { background: rgba(74,124,240,0.08); border: 1px solid rgba(74,124,240,0.2); border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #7aa8f8; font-family: var(--mono); margin-bottom: 16px; }
+  .autocomplete-wrapper { position: relative; }
+  .autocomplete-dropdown { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #fff; border: 1.5px solid var(--navy); border-radius: 6px; box-shadow: 0 4px 16px rgba(30,58,138,0.12); z-index: 500; max-height: 180px; overflow-y: auto; display: none; }
+  .autocomplete-dropdown.open { display: block; }
+  .autocomplete-option { padding: 9px 12px; font-size: 13px; cursor: pointer; color: var(--text); transition: background 0.1s; }
+  .autocomplete-option:hover, .autocomplete-option.highlighted { background: #eef2ff; color: var(--navy); }
+  .autocomplete-option:first-child { border-radius: 4px 4px 0 0; }
+  .autocomplete-option:last-child { border-radius: 0 0 4px 4px; }
+  .autocomplete-option:only-child { border-radius: 4px; }
 
   .schedule-day-block { margin-bottom: 1px; }
   .send-count-badge { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 2px 8px; font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.9); }
@@ -238,6 +246,7 @@
           <div style="display:flex;align-items:center;gap:8px">
             <span class="client-count" id="client-count-badge">0 clients</span>
             <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" title="Geocode clients with missing map pins">&#9679; Fix Pins</button>
+            <button class="btn btn-ghost btn-sm" id="regeocode-btn" onclick="regeocodeAllPins()" title="Re-geocode all clients including ones with existing coordinates">&#8635; Re-geocode All</button>
           </div>
         </div>
         <div class="legend">
@@ -303,8 +312,14 @@
           </div>
           <div class="form-field">
             <label>Category</label>
-            <input type="text" class="form-input" id="evt-type" placeholder="e.g. Deadline, Birthday, Election" list="category-suggestions" autocomplete="off">
-            <datalist id="category-suggestions"></datalist>
+            <div class="autocomplete-wrapper">
+              <input type="text" class="form-input" id="evt-type" placeholder="e.g. Deadline, Birthday, Election" autocomplete="off"
+                oninput="filterAC('evt-type','cat-drop',eventCategories)"
+                onfocus="filterAC('evt-type','cat-drop',eventCategories)"
+                onblur="closeACDelayed('cat-drop')"
+                onkeydown="handleACKey(event,'cat-drop','evt-type')">
+              <div class="autocomplete-dropdown" id="cat-drop"></div>
+            </div>
           </div>
           <div class="form-field">
             <label>Applies to</label>
@@ -352,8 +367,14 @@
         </select>
       </div>
       <div class="form-field"><label>Office Type</label>
-        <input type="text" class="form-input" id="add-office" placeholder="e.g. Mayor, State House, County Party" list="office-type-suggestions" autocomplete="off">
-        <datalist id="office-type-suggestions"></datalist>
+        <div class="autocomplete-wrapper">
+          <input type="text" class="form-input" id="add-office" placeholder="e.g. Mayor, State House, County Party" autocomplete="off"
+            oninput="filterAC('add-office','office-drop',officeTypes)"
+            onfocus="filterAC('add-office','office-drop',officeTypes)"
+            onblur="closeACDelayed('office-drop')"
+            onkeydown="handleACKey(event,'office-drop','add-office')">
+          <div class="autocomplete-dropdown" id="office-drop"></div>
+        </div>
       </div>
       <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="add-district" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
       <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
@@ -516,7 +537,7 @@ function officeColor(office) {
   if (o.includes('senate')) return '#9b6dff';
   if (o.includes('congress') || o.includes('representative')) return '#f0a500';
   if (o.includes('mayor') || o.includes('municipal') || o.includes('city')) return '#4a7cf0';
-  if (o.includes('county')) return '#6b7280';
+  if (o.includes('county')) return '#f0a500';
   // Statewide offices — anything without a district location
   return '#e24b4a';
 }
@@ -607,7 +628,14 @@ function openClientDetail(id, editMode = false) {
       <div class="add-event-form">
         <div class="form-field"><label>Full Name</label><input type="text" class="form-input" id="edit-name" value="${c.name || ''}"></div>
         <div class="form-field"><label>Office Type</label>
-          <input type="text" class="form-input" id="edit-office" value="${c.office || ''}" placeholder="e.g. Mayor, State House" list="office-type-suggestions" autocomplete="off">
+          <div class="autocomplete-wrapper">
+            <input type="text" class="form-input" id="edit-office" value="${c.office || ''}" placeholder="e.g. Mayor, State House" autocomplete="off"
+              oninput="filterAC('edit-office','edit-office-drop',officeTypes)"
+              onfocus="filterAC('edit-office','edit-office-drop',officeTypes)"
+              onblur="closeACDelayed('edit-office-drop')"
+              onkeydown="handleACKey(event,'edit-office-drop','edit-office')">
+            <div class="autocomplete-dropdown" id="edit-office-drop"></div>
+          </div>
         </div>
         <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
         <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
@@ -1016,6 +1044,17 @@ async function geocodeMissingPins() {
   showToast(msg, failed > 0 ? 'error' : 'success');
 }
 
+async function regeocodeAllPins() {
+  if (!confirm('Re-geocode all clients? This will overwrite existing pin locations.')) return;
+  const btn = document.getElementById('regeocode-btn');
+  btn.disabled = true;
+  // Temporarily null out all coords so geocodeMissingPins processes everyone
+  const origCoords = clients.map(c => ({ id: c.id, lat: c.lat, lng: c.lng }));
+  clients.forEach(c => { c.lat = null; c.lng = null; });
+  await geocodeMissingPins();
+  btn.disabled = false;
+}
+
 // ============================================================
 // ADD CLIENT
 // ============================================================
@@ -1057,6 +1096,55 @@ function populateClientDropdown() {
 }
 
 // ============================================================
+// AUTOCOMPLETE HELPERS
+// ============================================================
+function filterAC(inputId, dropId, options) {
+  const input = document.getElementById(inputId);
+  const drop = document.getElementById(dropId);
+  if (!input || !drop) return;
+  const val = input.value.trim().toLowerCase();
+  const filtered = val ? options.filter(o => o.toLowerCase().includes(val)) : options;
+  if (!filtered.length) { drop.classList.remove('open'); drop.innerHTML = ''; return; }
+  drop.innerHTML = filtered.map(o =>
+    `<div class="autocomplete-option" onmousedown="selectAC('${inputId}','${dropId}','${o.replace(/'/g, "\'")}')">${o}</div>`
+  ).join('');
+  drop.classList.add('open');
+}
+
+function selectAC(inputId, dropId, value) {
+  const input = document.getElementById(inputId);
+  const drop = document.getElementById(dropId);
+  if (input) input.value = value;
+  if (drop) drop.classList.remove('open');
+}
+
+function closeACDelayed(dropId) {
+  setTimeout(() => { const d = document.getElementById(dropId); if (d) d.classList.remove('open'); }, 150);
+}
+
+function handleACKey(event, dropId, inputId) {
+  const drop = document.getElementById(dropId);
+  if (!drop) return;
+  const opts = drop.querySelectorAll('.autocomplete-option');
+  const highlighted = drop.querySelector('.highlighted');
+  let idx = Array.from(opts).indexOf(highlighted);
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (highlighted) highlighted.classList.remove('highlighted');
+    opts[(idx + 1) % opts.length]?.classList.add('highlighted');
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (highlighted) highlighted.classList.remove('highlighted');
+    opts[(idx - 1 + opts.length) % opts.length]?.classList.add('highlighted');
+  } else if (event.key === 'Enter' && highlighted) {
+    event.preventDefault();
+    selectAC(inputId, dropId, highlighted.textContent);
+  } else if (event.key === 'Escape') {
+    drop.classList.remove('open');
+  }
+}
+
+// ============================================================
 // TOAST
 // ============================================================
 let toastTimer;
@@ -1092,11 +1180,7 @@ async function loadOfficeTypesFromSupabase() {
   updateOfficeDatalist();
 }
 
-function updateOfficeDatalist() {
-  const dl = document.getElementById('office-type-suggestions');
-  if (!dl) return;
-  dl.innerHTML = officeTypes.map(o => `<option value="${o}">`).join('');
-}
+function updateOfficeDatalist() { /* autocomplete-dropdown handles this */ }
 
 async function saveCategory(cat) {
   if (!cat || eventCategories.includes(cat)) return;
@@ -1115,11 +1199,7 @@ async function loadCategoriesFromSupabase() {
   updateCategoryDatalist();
 }
 
-function updateCategoryDatalist() {
-  const dl = document.getElementById('category-suggestions');
-  if (!dl) return;
-  dl.innerHTML = eventCategories.map(c => `<option value="${c.charAt(0).toUpperCase() + c.slice(1)}">`).join('');
-}
+function updateCategoryDatalist() { /* autocomplete-dropdown handles this */ }
 
 async function loadSendsFromSupabase() {
   const data = await sbFetch('sends?select=*&order=date');
