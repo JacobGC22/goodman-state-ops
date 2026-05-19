@@ -1134,7 +1134,9 @@ async function syncMonday() {
       if (!existing) {
         const client = clients.find(c => c.id === s.client_id);
         s.state = client ? client.state : currentState;
-        const saved = await sbFetch('sends', 'POST', s);
+        // Remove time field — send times live in send_times table, not sends
+        const { time: _t, ...sendToSave } = s;
+        const saved = await sbFetch('sends', 'POST', sendToSave);
         if (saved !== null) { sends.push(s); savedCount++; }
       } else {
         const updates = {};
