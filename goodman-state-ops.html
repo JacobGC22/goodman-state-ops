@@ -581,6 +581,7 @@ let approverFilterOn = false;
 let selectedApprovers = new Set(); // which approvers are checked
 let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
+let sortByTime = false; // true only when Re-Sort by Time is active
 const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Malinowski'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
@@ -1028,17 +1029,18 @@ function renderSchedule() {
   });
   const byDay = {};
   monthSends.forEach(s => { if (!byDay[s.date]) byDay[s.date] = []; byDay[s.date].push(s); });
-  // Sort each day: emails first then texts, then by saved time, then alphabetical
+  // Default sort: emails first, then texts, each group alphabetical
+  // Re-Sort by Time: sort by saved time ascending, earliest first
   Object.keys(byDay).forEach(date => {
     byDay[date].sort((a, b) => {
-      const ta = timeToMins(editedTimes[a.id] || a.time || '');
-      const tb = timeToMins(editedTimes[b.id] || b.time || '');
-      // If both have times, sort by time ascending (earliest first) regardless of type
-      if (ta !== -999 && tb !== -999) return ta - tb;
-      // If only one has a time, it goes first
-      if (ta !== -999) return -1;
-      if (tb !== -999) return 1;
-      // Neither has a time: emails first, then alphabetical
+      if (sortByTime) {
+        const ta = timeToMins(editedTimes[a.id] || a.time || '');
+        const tb = timeToMins(editedTimes[b.id] || b.time || '');
+        if (ta !== -999 && tb !== -999) return ta - tb;
+        if (ta !== -999) return -1;
+        if (tb !== -999) return 1;
+      }
+      // Default: emails first, then texts, then alphabetical
       if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
       const na = (clients.find(c => c.id === a.client_id)?.name || a.client_name || '').toLowerCase();
       const nb = (clients.find(c => c.id === b.client_id)?.name || b.client_name || '').toLowerCase();
@@ -1309,7 +1311,9 @@ function toggleHideScheduled() {
 }
 
 function resortByTime() {
-  // Re-sort sends in memory by their saved time for display
+  sortByTime = !sortByTime;
+  const btn = document.querySelector('[onclick="resortByTime()"]');
+  if (btn) { btn.style.background = sortByTime ? '#eef2ff' : ''; btn.style.color = sortByTime ? 'var(--navy)' : ''; }
   renderSchedule();
 }
 
@@ -1359,6 +1363,7 @@ async function syncMonday() {
         const client = clients.find(c => c.id === s.client_id);
         s.state = client ? client.state : currentState;
         const { time: _t, ...sendToSave } = s;
+        if (!sendToSave.status) sendToSave.status = '';
         const saved = await sbFetch('sends', 'POST', sendToSave);
         if (saved !== null) { sends.push(s); savedCount++; }
       } else {
@@ -1366,6 +1371,7 @@ async function syncMonday() {
         if (existing.date !== s.date) updates.date = s.date;
         if (s.note !== undefined && s.note !== existing.note) updates.note = s.note;
         if (s.assigned_people !== undefined && s.assigned_people !== existing.assigned_people) updates.assigned_people = s.assigned_people;
+        if (s.status !== undefined && s.status !== existing.status) updates.status = s.status;
         if (Object.keys(updates).length) {
           await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', updates);
           Object.assign(existing, updates);
