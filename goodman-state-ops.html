@@ -307,7 +307,8 @@
             oninput="filterAC('viewing-as-input','viewing-as-drop',getStaffList())"
             onfocus="filterAC('viewing-as-input','viewing-as-drop',getStaffList())"
             onblur="closeACDelayed('viewing-as-drop');applyViewingAs()"
-            onkeydown="handleACKey(event,'viewing-as-drop','viewing-as-input')">
+            onkeydown="handleACKey(event,'viewing-as-drop','viewing-as-input')"
+            onclick="filterAC('viewing-as-input','viewing-as-drop',getStaffList())">
           <div class="autocomplete-dropdown" id="viewing-as-drop"></div>
         </div>
       </div>
@@ -339,7 +340,8 @@
               oninput="filterAC('cal-viewing-as-input','cal-viewing-as-drop',getStaffList())"
               onfocus="filterAC('cal-viewing-as-input','cal-viewing-as-drop',getStaffList())"
               onblur="closeACDelayed('cal-viewing-as-drop');applyCalViewingAs()"
-              onkeydown="handleACKey(event,'cal-viewing-as-drop','cal-viewing-as-input')">
+              onkeydown="handleACKey(event,'cal-viewing-as-drop','cal-viewing-as-input')"
+              onclick="filterAC('cal-viewing-as-input','cal-viewing-as-drop',getStaffList())">
             <div class="autocomplete-dropdown" id="cal-viewing-as-drop"></div>
           </div>
         </div>
@@ -1003,10 +1005,10 @@ function renderSchedule() {
                   <div class="send-type ${s.type}">${s.type === 'email' ? '✉ Email' : '✉ Text'}</div>
                   <div class="send-item-name">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠ overlap</span>' : ''}</div>
                   <div class="time-input-wrap">
-                    <input type="time" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="--:--">
+                    <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 10:00 AM">
                     <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
                   </div>
-                  <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${formatTime(currentTime)}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
+                  <div>${currentTime ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${currentTime}</span>` : '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">No time set</span>'}</div>
                 </div>
                 <div class="send-note-wrap">
                   <textarea class="send-note-input" id="note-${s.id}" rows="1" placeholder="Note (syncs to Monday)">${currentNote}</textarea>
@@ -1040,7 +1042,19 @@ function detectConflicts(emailSends) {
   return conflicts;
 }
 
-function timeToMins(t) { if (!t) return -999; const [h,m] = t.split(':').map(Number); return h*60+m; }
+function timeToMins(t) {
+  if (!t) return -999;
+  // Handle both "10:00 AM" and "10:00" formats
+  const ampm = t.match(/([ap]m)/i);
+  const parts = t.replace(/[apm\s]/gi, '').split(':').map(Number);
+  if (isNaN(parts[0])) return -999;
+  let h = parts[0], m = parts[1] || 0;
+  if (ampm) {
+    if (ampm[0].toLowerCase() === 'pm' && h !== 12) h += 12;
+    if (ampm[0].toLowerCase() === 'am' && h === 12) h = 0;
+  }
+  return h * 60 + m;
+}
 
 async function saveTime(sendId) {
   const val = document.getElementById(`time-${sendId}`).value;
@@ -1085,7 +1099,9 @@ function changeMonth(dir) { scheduleMonth = new Date(scheduleMonth.getFullYear()
 function getStaffList() {
   const everyone = 'Everyone';
   const names = [...new Set(sends.filter(s => s.assigned_people).flatMap(s => s.assigned_people.split(',').map(n => n.trim())))].sort();
-  return [everyone, ...names];
+  const list = [everyone, ...names];
+  window._staffList = list; // keep fresh for autocomplete
+  return list;
 }
 
 function applyViewingAs() {
@@ -1209,7 +1225,14 @@ function getSendCalendarEvents() {
     const client = clients.find(c => c.id === s.client_id);
     return {
       id: `send-${s.id}`,
-      title: `${s.client_name} ${s.type === 'email' ? '✉' : '📱'}${s.note ? ' · ' + s.note.slice(0, 30) : ''}`,
+      title: (() => {
+        const parts = (client ? client.name : s.client_name).split(' ').filter(Boolean);
+        let displayName;
+        if (parts.length <= 1) displayName = parts[0] || s.client_name;
+        else if (parts.length === 2) displayName = parts[1];
+        else displayName = parts.map(w => w[0].toUpperCase()).join('');
+        return `${displayName} ${s.type === 'email' ? '✉' : '📱'}${s.note ? ' · ' + s.note.slice(0, 25) : ''}`;
+      })(),
       date: s.date,
       type: 'send',
       state: client?.state || currentState,
@@ -1580,12 +1603,11 @@ async function loadSendsFromSupabase() {
   if (times && times.length) {
     times.forEach(t => { if (t.send_time) editedTimes[t.monday_item_id] = t.send_time; });
   }
-  // Populate viewing-as dropdowns now that sends (and assigned_people) are loaded
+  // Populate viewing-as autocomplete options after sends load
+  // Don't open the dropdown — just pre-load the options so they show on focus
   const staffList = getStaffList();
-  ['viewing-as-input', 'cal-viewing-as-input'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) filterAC(id, id === 'viewing-as-input' ? 'viewing-as-drop' : 'cal-viewing-as-drop', staffList);
-  });
+  // Store on window so filterAC can access fresh list
+  window._staffList = staffList;
   renderSchedule();
   renderCalendar();
 }
