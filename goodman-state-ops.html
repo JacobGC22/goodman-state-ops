@@ -69,7 +69,7 @@
   .client-name { font-weight: 500; font-size: 14px; color: var(--text); }
   .client-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
   .badge { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 400; }
-  .badge-office { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+  .badge-office { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; font-weight: 600; }
   .badge-pvi-d { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
   .badge-pvi-r { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
   .badge-pvi-even { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
@@ -211,6 +211,11 @@
   .add-client-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
 
   .legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 0 0 20px; }
+  .sort-btn { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.1s; }
+  .sort-btn:hover { background: var(--bg3); color: var(--text); }
+  .sort-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .sort-btn.desc::after { content: ' ↓'; }
+  .sort-btn.asc::after { content: ' ↑'; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); font-family: var(--mono); }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 </style>
@@ -246,11 +251,22 @@
       <div id="sidebar-list-view">
         <div class="sidebar-header">
           <h2 id="sidebar-state-label">Wisconsin</h2>
-          <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="client-count" id="client-count-badge">0 clients</span>
-            <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" title="Geocode clients with missing map pins">&#9679; Fix Pins</button>
-            <button class="btn btn-ghost btn-sm" id="regeocode-btn" onclick="regeocodeAllPins()" title="Re-geocode all clients including ones with existing coordinates">&#8635; Re-geocode All</button>
+            <button class="btn btn-ghost btn-sm" id="admin-toggle-btn" onclick="toggleAdminTools()" style="font-family:var(--mono);font-size:11px;border-color:rgba(0,0,0,0.2);color:var(--text3)">&#128274; Admin</button>
+            <div id="admin-tools" style="display:none;display:none;align-items:center;gap:6px">
+              <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" style="font-size:11px" title="Fix clients with missing pins">&#9679; Fix Pins</button>
+              <button class="btn btn-ghost btn-sm" id="regeocode-btn" onclick="regeocodeAllPins()" style="font-size:11px" title="Re-geocode all pins">&#8635; Re-geocode All</button>
+            </div>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 20px 4px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em">Sort:</span>
+          <button class="sort-btn active" id="sort-name" onclick="setSort('name')">Name</button>
+          <button class="sort-btn" id="sort-office" onclick="setSort('office')">Office</button>
+          <button class="sort-btn" id="sort-district" onclick="setSort('district')">District</button>
+          <button class="sort-btn" id="sort-pvi" onclick="setSort('pvi')">Partisanship</button>
+          <button class="sort-btn" id="sort-tag" onclick="setSort('tag')">Tag</button>
         </div>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:#4a7cf0"></div>Mayor</div>
@@ -258,6 +274,8 @@
           <div class="legend-item"><div class="legend-dot" style="background:#9b6dff"></div>State Senate</div>
           <div class="legend-item"><div class="legend-dot" style="background:#f0a500"></div>Congressional</div>
           <div class="legend-item"><div class="legend-dot" style="background:#e24b4a"></div>Statewide</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#166534"></div>County Party</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#be185d"></div>Organization</div>
         </div>
         <div id="client-list"></div>
       </div>
@@ -381,7 +399,7 @@
         </div>
       </div>
       <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="add-district" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
-      <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
+      <div class="form-field"><label>Partisanship</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
       <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="add-tag" placeholder="e.g. Tier 1, Swing, Hold"></div>
       <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="add-monday" placeholder="e.g. 6414643297"></div>
       <div class="form-field"><label>Notes</label><textarea class="form-input" id="add-notes" rows="3" placeholder="Freeform notes"></textarea></div>
@@ -493,6 +511,8 @@ let editedTimes = {};
 let eventCategories = []; // persisted freeform categories
 let officeTypes = []; // persisted freeform office types
 let activeStates = ['WI', 'KS']; // loaded from Supabase
+let clientSortField = 'name';
+let clientSortDir = 'asc';
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
@@ -610,8 +630,9 @@ function officeColor(office) {
   if (o.includes('senate')) return '#9b6dff';
   if (o.includes('congress') || o.includes('representative')) return '#f0a500';
   if (o.includes('mayor') || o.includes('municipal') || o.includes('city')) return '#4a7cf0';
-  if (o.includes('county')) return '#f0a500';
-  // Statewide offices — anything without a district location
+  if (o.includes('county party') || o.includes('county democratic') || o.includes('county republican')) return '#166534';
+  if (o.includes('organization') || o.includes('initiative') || o.includes('dems') || o.includes('caucus')) return '#be185d';
+  if (o.includes('county')) return '#166534';
   return '#e24b4a';
 }
 
@@ -645,7 +666,7 @@ function renderMap() {
       className: '', iconSize: [24, 32], iconAnchor: [12, 31], popupAnchor: [0, -32]
     });
     const marker = L.marker([client.lat, client.lng], { icon })
-      .bindPopup(`<div class="popup-name">${client.name}</div><div class="popup-meta">${client.office}${client.district ? ' — ' + client.district : ''}</div><div class="popup-meta">PVI: ${client.pvi || '—'}${client.tag ? ' &nbsp; ' + client.tag : ''}</div>`)
+      .bindPopup(`<div class="popup-name">${client.name}</div><div class="popup-meta">${client.office}${client.district ? ' — ' + client.district : ''}</div><div class="popup-meta">Partisanship: ${client.pvi || '—'}${client.tag ? ' &nbsp; ' + client.tag : ''}</div>`)
       .on('click', () => openClientDetail(client.id));
     clusterGroup.addLayer(marker);
     mapMarkers[client.id] = marker;
@@ -657,9 +678,49 @@ function renderMap() {
 // ============================================================
 // CLIENT LIST SIDEBAR
 // ============================================================
+function setSort(field) {
+  if (clientSortField === field) {
+    clientSortDir = clientSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    clientSortField = field;
+    clientSortDir = 'asc';
+  }
+  document.querySelectorAll('.sort-btn').forEach(b => {
+    b.classList.remove('active','asc','desc');
+    if (b.id === `sort-${field}`) { b.classList.add('active', clientSortDir); }
+  });
+  renderClientList();
+}
+
+function sortedClients(sc) {
+  return [...sc].sort((a, b) => {
+    let av = (a[clientSortField] || '').toLowerCase();
+    let bv = (b[clientSortField] || '').toLowerCase();
+    if (clientSortField === 'pvi') {
+      // Sort numerically: D+22 > D+3, R values separate
+      const parseP = v => {
+        if (!v) return 0;
+        const m = v.match(/([DR])[+\-]?(\d+)/i);
+        if (!m) return 0;
+        return m[1].toUpperCase() === 'D' ? parseInt(m[2]) : -parseInt(m[2]);
+      };
+      av = parseP(a.pvi); bv = parseP(b.pvi);
+      return clientSortDir === 'asc' ? bv - av : av - bv;
+    }
+    if (av < bv) return clientSortDir === 'asc' ? -1 : 1;
+    if (av > bv) return clientSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
 function renderClientList() {
   const list = document.getElementById('client-list');
-  const sc = stateClients();
+  const sc = sortedClients(stateClients());
+  // Update sort button UI to reflect current state
+  document.querySelectorAll('.sort-btn').forEach(b => {
+    b.classList.remove('active','asc','desc');
+    if (b.id === `sort-${clientSortField}`) b.classList.add('active', clientSortDir);
+  });
   if (!sc.length) { list.innerHTML = '<div class="empty-state"><p>No clients in this state.</p><p>Use "Add Client" to get started.</p></div>'; return; }
   list.innerHTML = sc.map(c => `
     <div class="client-list-item ${c.id === selectedClientId ? 'selected' : ''}" onclick="openClientDetail('${c.id}')">
@@ -667,18 +728,38 @@ function renderClientList() {
       <div class="client-meta">
         <span class="badge badge-office">${c.office}</span>
         ${(c.district && c.district.toUpperCase() !== 'N/A') ? `<span class="badge badge-district">${c.district}</span>` : ''}
-        ${c.pvi ? `<span class="badge ${pviClass(c.pvi)}">${c.pvi}</span>` : ''}
+        ${c.pvi ? `<span class="badge" style="${pviBadgeStyle(c.pvi)}">${c.pvi} </span>` : ''}
         ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
       </div>
     </div>
   `).join('');
 }
 
-function pviClass(pvi) {
-  if (!pvi) return 'badge-district';
-  if (pvi.startsWith('D')) return 'badge-pvi-d';
-  if (pvi.startsWith('R')) return 'badge-pvi-r';
-  return 'badge-pvi-even';
+function pviBadgeStyle(pvi) {
+  if (!pvi) return '';
+  const m = pvi.match(/([DdRr])[+\-]?(\d+)/);
+  if (!m) return 'background:#f4f5f8;color:#4a5173;border:1px solid #d1d5db;';
+  const party = m[1].toUpperCase();
+  const num = parseInt(m[2]);
+  // Scale: 0 = light, 30+ = darkest (capped)
+  const intensity = Math.min(num / 30, 1);
+  if (party === 'D') {
+    // Light blue (#bfdbfe) to dark blue (#1e3a8a)
+    const r = Math.round(191 - intensity * (191 - 30));
+    const g = Math.round(219 - intensity * (219 - 58));
+    const b = Math.round(254 - intensity * (254 - 138));
+    const textR = intensity > 0.45 ? 255 : 30;
+    const textG = intensity > 0.45 ? 255 : 58;
+    const textB = intensity > 0.45 ? 255 : 138;
+    return `background:rgb(${r},${g},${b});color:rgb(${textR},${textG},${textB});border:1px solid rgb(${Math.round(r*0.8)},${Math.round(g*0.8)},${Math.round(b*0.8)});`;
+  } else {
+    // Light red (#fecaca) to dark red (#7f1d1d)
+    const r = Math.round(254 - intensity * (254 - 127));
+    const g = Math.round(202 - intensity * (202 - 29));
+    const b = Math.round(202 - intensity * (202 - 29));
+    const textLight = intensity > 0.45;
+    return `background:rgb(${r},${g},${b});color:${textLight ? '#fff' : '#7f1d1d'};border:1px solid rgb(${Math.round(r*0.8)},${Math.round(g*0.8)},${Math.round(b*0.8)});`;
+  }
 }
 
 function showSidebarList() {
@@ -711,7 +792,7 @@ function openClientDetail(id, editMode = false) {
           </div>
         </div>
         <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="edit-district" value="${c.district || ''}" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
-        <div class="form-field"><label>PVI</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
+        <div class="form-field"><label>Partisanship</label><input type="text" class="form-input" id="edit-pvi" value="${c.pvi || ''}"></div>
         <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="edit-tag" value="${c.tag || ''}"></div>
         <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="edit-monday" value="${c.monday_board || ''}"></div>
         <div class="form-field"><label>Notes</label><textarea class="form-input" id="edit-notes" rows="5">${c.notes || ''}</textarea></div>
@@ -734,7 +815,7 @@ function openClientDetail(id, editMode = false) {
       <div class="detail-fields">
         <div class="detail-field"><label>Office</label><span>${c.office || '—'}</span></div>
         <div class="detail-field"><label>District / Location</label><span>${c.district || '—'}</span></div>
-        <div class="detail-field"><label>PVI</label><span>${c.pvi || '—'}</span></div>
+        <div class="detail-field"><label>Partisanship</label><span>${c.pvi || '—'}</span></div>
         <div class="detail-field"><label>Tag</label><span>${c.tag || '—'}</span></div>
         ${c.monday_board ? `<div class="detail-field"><label>Monday Board</label><span style="font-family:var(--mono);font-size:12px">${c.monday_board}</span></div>` : ''}
       </div>
@@ -1063,6 +1144,19 @@ const DISTRICT_CENTROIDS = {
   KS_HD: {1:[37.149,-94.9261], 2:[37.5449,-95.0462], 3:[37.3952,-94.6978], 4:[38.013,-94.8382], 5:[38.7112,-95.1345], 6:[38.6043,-94.7651], 7:[37.296,-95.3579], 8:[38.8564,-94.7137], 9:[38.1165,-95.2292], 10:[38.9335,-95.2371], 11:[37.2046,-95.6473], 12:[37.3277,-96.4208], 13:[37.9471,-96.1565], 14:[38.9231,-94.8421], 15:[38.8495,-94.8315], 16:[38.9193,-94.7208], 17:[38.9908,-94.7932], 18:[39.0226,-94.7244], 19:[38.9631,-94.6401], 20:[38.9208,-94.6332], 21:[38.993,-94.6426], 22:[38.9683,-94.6871], 23:[38.9727,-94.7228], 24:[39.0161,-94.6825], 25:[39.0242,-94.6318], 26:[38.788,-94.784], 27:[38.7913,-94.6686], 28:[38.8775,-94.6417], 29:[38.9226,-94.6833], 30:[38.9428,-94.8042], 31:[39.0603,-94.6437], 32:[39.1061,-94.6427], 33:[39.0787,-94.8327], 34:[39.124,-94.6897], 35:[39.1478,-94.6626], 36:[39.1528,-94.809], 37:[39.0912,-94.7147], 38:[39.1368,-94.9715], 39:[39.0315,-94.8227], 40:[39.2424,-94.9015], 41:[39.3564,-94.9851], 42:[39.1655,-95.1387], 43:[38.8091,-94.9996], 44:[38.9531,-95.2822], 45:[39.0106,-95.2963], 46:[38.9718,-95.2383], 47:[39.2044,-95.4453], 48:[38.8751,-94.6861], 49:[38.8747,-94.7533], 50:[39.1515,-95.8055], 51:[38.9776,-96.235], 52:[39.0016,-95.7896], 53:[39.0427,-95.7514], 54:[38.8583,-95.7341], 55:[39.0528,-95.7039], 56:[38.9833,-95.6748], 57:[39.0615,-95.6568], 58:[39.0107,-95.6441], 59:[38.5559,-95.2971], 60:[38.4987,-96.2712], 61:[39.3783,-96.2262], 62:[39.7547,-95.8021], 63:[39.6547,-95.2335], 64:[39.3561,-97.1425], 65:[39.1068,-96.9019], 66:[39.1955,-96.579], 67:[39.1759,-96.6111], 68:[38.7931,-96.6655], 69:[38.7036,-97.6525], 70:[38.6163,-97.1149], 71:[38.8716,-97.4915], 72:[37.9724,-97.2662], 73:[38.4349,-97.7036], 74:[38.1838,-97.3867], 75:[37.9248,-96.8532], 76:[38.4111,-95.8561], 77:[37.6065,-97.0485], 78:[38.8518,-94.7789], 79:[37.3314,-97.2699], 80:[37.1134,-97.3072], 81:[37.6032,-97.2255], 82:[37.5081,-97.2111], 83:[37.6796,-97.2714], 84:[37.7003,-97.3022], 85:[37.7719,-97.1927], 86:[37.6623,-97.3109], 87:[37.6965,-97.2229], 88:[37.6533,-97.1959], 89:[37.7455,-97.286], 90:[37.8397,-97.4547], 91:[37.7881,-97.3574], 92:[37.7168,-97.3648], 93:[37.5539,-97.5763], 94:[37.7054,-97.4955], 95:[37.6716,-97.3733], 96:[37.6251,-97.3416], 97:[37.6318,-97.4256], 98:[37.582,-97.3192], 99:[37.7041,-97.1343], 100:[37.7156,-97.451], 101:[37.7913,-97.7748], 102:[38.0512,-97.9062], 103:[37.718,-97.3349], 104:[38.1629,-97.8148], 105:[37.708,-97.4116], 106:[39.7933,-97.3576], 107:[39.2665,-97.8923], 108:[38.9392,-94.7496], 109:[39.1844,-98.5753], 110:[39.4449,-99.559], 111:[38.8686,-99.2638], 112:[38.5079,-98.769], 113:[38.2817,-98.7962], 114:[37.7527,-98.2241], 115:[37.5412,-99.9838], 116:[37.3079,-98.7206], 117:[38.9137,-95.089], 118:[38.7468,-100.6663], 119:[37.7578,-100.0137], 120:[39.5016,-101.3079], 121:[38.8935,-94.9534], 122:[38.0539,-100.4915], 123:[37.9818,-100.8574], 124:[37.5393,-101.5217], 125:[37.1859,-100.7627]},
   KS_SD: {1:[39.6517,-95.7468], 2:[38.9809,-95.2347], 3:[38.7119,-95.5631], 4:[39.1379,-94.6868], 5:[39.2107,-94.8905], 6:[39.0771,-94.7098], 7:[39.0007,-94.6411], 8:[38.9304,-94.685], 9:[38.9816,-95.0526], 10:[39.0058,-94.8197], 11:[38.8331,-94.6452], 12:[38.0894,-95.3785], 13:[37.5207,-94.8491], 14:[38.1489,-96.8494], 15:[37.304,-95.7765], 16:[37.758,-97.1318], 17:[38.6522,-96.455], 18:[39.2876,-96.0139], 19:[39.0312,-95.4958], 20:[38.9533,-96.1345], 21:[38.9664,-94.7496], 22:[39.2966,-96.7352], 23:[38.8,-94.8128], 24:[38.8286,-97.3805], 25:[37.676,-97.3316], 26:[37.6261,-97.5964], 27:[37.7409,-97.4481], 28:[37.6059,-97.3109], 29:[37.7123,-97.3037], 30:[37.5648,-97.2352], 31:[37.9912,-97.4334], 32:[37.2627,-97.3348], 33:[38.1141,-99.0239], 34:[37.5987,-98.306], 35:[38.8219,-94.7253], 36:[39.469,-98.1937], 37:[38.7066,-94.8549], 38:[37.5426,-100.2329], 39:[37.9736,-101.3022], 40:[39.3312,-100.688]},
 };
+
+let adminToolsVisible = false;
+function toggleAdminTools() {
+  adminToolsVisible = !adminToolsVisible;
+  const tools = document.getElementById('admin-tools');
+  const btn = document.getElementById('admin-toggle-btn');
+  if (tools) tools.style.display = adminToolsVisible ? 'flex' : 'none';
+  if (btn) {
+    btn.textContent = adminToolsVisible ? '🔓 Admin' : '🔒 Admin';
+    btn.style.color = adminToolsVisible ? 'var(--red)' : 'var(--text3)';
+    btn.style.borderColor = adminToolsVisible ? 'rgba(185,28,28,0.3)' : 'rgba(0,0,0,0.2)';
+  }
+}
 
 async function geocodeClient(state, office, district) {
   const loc = (district || '').trim();
