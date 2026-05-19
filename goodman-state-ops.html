@@ -109,7 +109,7 @@
   .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
   .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
   .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
-  .send-row { display: grid; grid-template-columns: 180px 80px 90px 120px 1fr 90px; align-items: start; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .send-row { display: grid; grid-template-columns: 200px 80px 100px 160px 1fr; align-items: start; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
@@ -606,11 +606,14 @@ async function saveSendTime(sendId, time) {
     const client = clients.find(c => c.id === send.client_id);
     if (client && client.monday_board && send.monday_id) {
       try {
-        await fetch(MONDAY_EDGE_FN, {
+        console.log('Writing send time to Monday:', { board: client.monday_board, item: send.monday_id, time });
+        const writeRes = await fetch(MONDAY_EDGE_FN, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
           body: JSON.stringify({ action: 'write_send_time', board_id: client.monday_board, monday_item_id: send.monday_id, send_time: time })
         });
+        const writeData = await writeRes.json();
+        console.log('Monday write-back response:', writeData);
       } catch(e) { console.warn('Monday write-back failed for send time:', e); }
     }
   }
@@ -1004,22 +1007,22 @@ function renderSchedule() {
             }).join('') : '';
             return `
               <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
-                <div style="display:flex;align-items:flex-start;gap:4px;padding-top:2px">
+                <div style="display:flex;align-items:flex-start;gap:4px;padding-top:1px">
                   <span style="font-size:13px;font-weight:500">${client ? client.name : s.client_name}</span>
-                  ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0;padding-top:1px">${assignedInitials}</span>` : ''}
+                  ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0;padding-top:2px">${assignedInitials}</span>` : ''}
                 </div>
                 <div class="send-type ${s.type}" style="padding-top:2px">${s.type === 'email' ? '✉ Email' : '📱 Text'}</div>
                 <div class="send-item-name" style="padding-top:2px">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠</span>' : ''}</div>
-                <div class="time-input-wrap">
-                  <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 1030">
+                <div style="display:flex;gap:4px;align-items:flex-start">
+                  <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 1030" style="flex:1;min-width:0">
                   <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
                 </div>
-                <div>
+                <div style="display:flex;gap:4px;align-items:flex-start">
                   <textarea class="send-note-input" id="note-${s.id}" placeholder="Note (syncs to Monday)"
-                    style="width:100%;min-height:26px;height:26px;overflow:hidden;resize:none;"
+                    style="flex:1;min-width:0;min-height:26px;height:26px;overflow:hidden;resize:none;"
                     oninput="this.style.height='26px';this.style.height=this.scrollHeight+'px'">${currentNote}</textarea>
+                  <button class="time-save-btn" onclick="saveNote('${s.id}')">Save</button>
                 </div>
-                <button class="time-save-btn" onclick="saveNote('${s.id}')" style="align-self:flex-start;margin-top:2px">Save</button>
               </div>`;
           }).join('')}
         </div>
