@@ -256,8 +256,9 @@
           <h2 id="sidebar-state-label">Wisconsin</h2>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="client-count" id="client-count-badge">0 clients</span>
+            <button class="btn btn-ghost btn-sm" id="map-all-states-btn" onclick="toggleMapAllStates()" style="font-size:11px">All States</button>
             <button class="btn btn-ghost btn-sm" id="admin-toggle-btn" onclick="toggleAdminTools()" style="font-family:var(--mono);font-size:11px;border-color:rgba(0,0,0,0.2);color:var(--text3)">&#128274; Admin</button>
-            <div id="admin-tools" style="display:none;display:none;align-items:center;gap:6px">
+            <div id="admin-tools" style="display:none;align-items:center;gap:6px">
               <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" style="font-size:11px" title="Fix clients with missing pins">&#9679; Fix Pins</button>
               <button class="btn btn-ghost btn-sm" id="regeocode-btn" onclick="regeocodeAllPins()" style="font-size:11px" title="Re-geocode all pins">&#8635; Re-geocode All</button>
             </div>
@@ -310,6 +311,16 @@
             onclick="filterAC('viewing-as-input','viewing-as-drop',getStaffList())">
           <div class="autocomplete-dropdown" id="viewing-as-drop"></div>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <div style="display:flex;gap:3px" id="send-type-filter">
+          <button class="sort-btn active" id="filter-all" onclick="setSendTypeFilter('all')">All</button>
+          <button class="sort-btn" id="filter-email" onclick="setSendTypeFilter('email')">✉ Email</button>
+          <button class="sort-btn" id="filter-text" onclick="setSendTypeFilter('text')">📱 Text</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="approver-toggle-btn" onclick="toggleApproverFilter()" title="Show only sends with approvers assigned" style="font-size:11px">👤 Approvers</button>
+        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times" style="font-size:11px">⇅ Resort</button>
+        <button class="btn btn-ghost btn-sm" id="hide-scheduled-btn" onclick="toggleHideScheduled()" style="font-size:11px">✓ Hide Scheduled</button>
       </div>
       <div class="sync-btn">
         <span class="sync-status" id="sync-status">Configure Monday.com API to enable sync</span>
@@ -379,7 +390,7 @@
           </div>
           <div class="form-field">
             <label>Applies to</label>
-            <select class="form-input" id="evt-state-scope">
+            <select class="form-input" id="evt-state-scope" onchange="populateClientDropdown()">
               <option value="current">Current state only</option>
               <option value="both">Both states (WI + KS)</option>
             </select>
@@ -437,6 +448,17 @@
       <div class="form-field"><label>District / Location</label><input type="text" class="form-input" id="add-district" placeholder="e.g. AD-90, Milwaukee, or N/A for statewide"></div>
       <div class="form-field"><label>Partisanship</label><input type="text" class="form-input" id="add-pvi" placeholder="e.g. D+8 or R+3"></div>
       <div class="form-field"><label>Category Tag</label><input type="text" class="form-input" id="add-tag" placeholder="e.g. Tier 1, Swing, Hold"></div>
+      <div class="form-field"><label>Timezone</label>
+        <select class="form-input" id="add-timezone">
+          <option value="">—</option>
+          <option value="ET">ET</option>
+          <option value="CT">CT</option>
+          <option value="MT">MT</option>
+          <option value="PT">PT</option>
+          <option value="MST">MST (no DST)</option>
+          <option value="PST+">PST+</option>
+        </select>
+      </div>
       <div class="form-field"><label>Monday Board ID</label><input type="text" class="form-input" id="add-monday" placeholder="e.g. 6414643297"></div>
       <div class="form-field"><label>Notes</label><textarea class="form-input" id="add-notes" rows="3" placeholder="Freeform notes"></textarea></div>
     </div>
@@ -550,6 +572,11 @@ let activeStates = ['WI', 'KS']; // loaded from Supabase
 let clientSortField = 'name';
 let clientSortDir = 'asc';
 let viewingAs = 'Everyone'; // session filter for schedule and calendar
+let sendTypeFilter = 'all'; // 'all', 'email', 'text'
+let approverFilterOn = false;
+let hideScheduled = false;
+let collapsedDays = {}; // date string → boolean
+const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Goodman'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
@@ -651,6 +678,7 @@ async function deleteCalendarEvent(evtId) {
 // ============================================================
 function switchState(state) {
   currentState = state;
+  try { localStorage.setItem('gc_state', state); } catch(e) {}
   renderStateTabs();
   document.getElementById('sidebar-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
   document.getElementById('schedule-state-label').textContent = state === 'WI' ? 'Wisconsin' : 'Kansas';
@@ -662,6 +690,7 @@ function switchState(state) {
 
 function switchTab(tab) {
   currentTab = tab;
+  try { localStorage.setItem('gc_tab', tab); } catch(e) {}
   document.querySelectorAll('.nav-tab').forEach((t, i) => t.classList.toggle('active', ['map','schedule','calendar'][i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`panel-${tab}`).classList.add('active');
@@ -681,7 +710,10 @@ function renderAll() {
   populateClientDropdown();
 }
 
-function stateClients() { return clients.filter(c => c.state === currentState); }
+function stateClients(forMap = false) {
+  if (forMap && mapAllStates) return clients;
+  return clients.filter(c => c.state === currentState);
+}
 
 function updateClientCount() {
   document.getElementById('client-count-badge').textContent = `${stateClients().length} clients`;
@@ -724,7 +756,7 @@ function renderMap() {
   if (!mapInstance || !clusterGroup) return;
   clusterGroup.clearLayers();
   mapMarkers = {};
-  const sc = stateClients();
+  const sc = stateClients(true);
   sc.forEach(client => {
     if (!client.lat || !client.lng) return;
     const color = officeColor(client.office);
@@ -795,6 +827,7 @@ function renderClientList() {
       <div class="client-meta">
         <span class="badge badge-office">${c.office}</span>
         ${(c.district && c.district.toUpperCase() !== 'N/A') ? `<span class="badge badge-district">${c.district}</span>` : ''}
+        ${c.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">${c.timezone}</span>` : ''}
         ${c.pvi ? `<span class="badge" style="${pviBadgeStyle(c.pvi)}">${c.pvi} </span>` : ''}
         ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
       </div>
@@ -939,6 +972,28 @@ async function confirmRemoveClient(id) {
 // ============================================================
 // SCHEDULE
 // ============================================================
+function captureUnsavedInputs() {
+  const unsaved = {};
+  document.querySelectorAll('[id^="time-"]').forEach(el => {
+    const id = el.id.replace('time-', '');
+    const saved = editedTimes[id] || '';
+    if (el.value && el.value !== saved) unsaved['time-' + id] = el.value;
+  });
+  document.querySelectorAll('[id^="note-"]').forEach(el => {
+    const id = el.id.replace('note-', '');
+    const send = sends.find(s => s.id === id);
+    if (el.value && el.value !== (send?.note || '')) unsaved['note-' + id] = el.value;
+  });
+  return unsaved;
+}
+
+function restoreUnsavedInputs(unsaved) {
+  Object.entries(unsaved).forEach(([key, val]) => {
+    const el = document.getElementById(key);
+    if (el) { el.value = val; if (el.tagName === 'TEXTAREA') { el.style.height = '26px'; el.style.height = el.scrollHeight + 'px'; } }
+  });
+}
+
 function renderSchedule() {
   const label = document.getElementById('month-label');
   label.textContent = scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -954,14 +1009,32 @@ function renderSchedule() {
     if (!s.date.startsWith(monthStr)) return false;
     if (!clientIds.includes(s.client_id)) return false;
     if (s.date < yesterdayStr) return false;
+    if (sendTypeFilter !== 'all' && s.type !== sendTypeFilter) return false;
     if (viewingAs !== 'Everyone' && s.assigned_people) {
       const names = s.assigned_people.split(',').map(n => n.trim());
       if (!names.includes(viewingAs)) return false;
     }
+    if (approverFilterOn && s.assigned_people) {
+      const names = s.assigned_people.split(',').map(n => n.trim());
+      if (!names.some(n => APPROVERS.includes(n))) return false;
+    }
+    if (hideScheduled && s.status === 'Scheduled/Sent') return false;
     return true;
   });
   const byDay = {};
   monthSends.forEach(s => { if (!byDay[s.date]) byDay[s.date] = []; byDay[s.date].push(s); });
+  // Sort each day: emails first then texts, then by saved time, then alphabetical
+  Object.keys(byDay).forEach(date => {
+    byDay[date].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
+      const ta = timeToMins(editedTimes[a.id] || a.time || '');
+      const tb = timeToMins(editedTimes[b.id] || b.time || '');
+      if (ta !== tb && ta !== -999 && tb !== -999) return ta - tb;
+      const na = (clients.find(c => c.id === a.client_id)?.name || a.client_name || '').toLowerCase();
+      const nb = (clients.find(c => c.id === b.client_id)?.name || b.client_name || '').toLowerCase();
+      return na.localeCompare(nb);
+    });
+  });
   const sortedDays = Object.keys(byDay).sort();
   const content = document.getElementById('schedule-content');
   // Clients without Monday board linked
@@ -975,20 +1048,32 @@ function renderSchedule() {
     content.innerHTML = unlinkedHtml + `<div class="empty-state"><p>No sends found for ${scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}.</p><p style="font-size:12px;color:var(--text3);margin-top:4px">Sync Monday.com or sends will appear here as they're added.</p></div>`;
     return;
   }
+  const unsavedInputs = captureUnsavedInputs();
   content.innerHTML = unlinkedHtml + sortedDays.map(date => {
     const daySends = byDay[date];
     const d = new Date(date + 'T12:00:00');
-    const dayLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' });
+    const baseLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' });
+    const todayStr = new Date().toISOString().slice(0,10);
+    const yestStr = new Date(Date.now()-86400000).toISOString().slice(0,10);
+    const tomStr = new Date(Date.now()+86400000).toISOString().slice(0,10);
+    const relLabel = date === todayStr ? ' — Today' : date === yestStr ? ' — Yesterday' : date === tomStr ? ' — Tomorrow' : '';
+    const dayLabel = baseLabel + relLabel;
+    const isCollapsed = collapsedDays[date] || false;
     return `
       <div class="schedule-day-block">
-        <div class="schedule-day-header">
+        <div class="schedule-day-header" onclick="toggleDayCollapse('${date}')" style="cursor:pointer">
           <span class="day-label">${dayLabel}</span>
-          <span class="send-count-badge">${daySends.length} send${daySends.length !== 1 ? 's' : ''}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="send-count-badge">${daySends.length} send${daySends.length !== 1 ? 's' : ''}</span>
+            <span id="day-chevron-${date}" style="color:rgba(255,255,255,0.6);font-size:12px;transition:transform 0.2s;${isCollapsed ? 'transform:rotate(-90deg)' : ''}">▾</span>
+          </div>
         </div>
-        <div class="schedule-sends">
-          ${daySends.map(s => {
+        <div class="schedule-sends" id="day-body-${date}" style="${isCollapsed ? 'display:none' : ''}">
+          ${daySends.map((s, rowIdx) => {
             const currentTime = editedTimes[s.id] || s.time || '';
             const client = clients.find(c => c.id === s.client_id);
+            const isScheduled = s.status === 'Scheduled/Sent';
+            const rowBg = isScheduled ? 'background:#f0fdf4;' : (rowIdx % 2 === 1 ? 'background:var(--bg3);' : '');
             const hasConflict = currentTime && daySends.some(other => {
               if (other.id === s.id) return false;
               if (other.type !== s.type) return false;
@@ -1005,10 +1090,11 @@ function renderSchedule() {
               const color = staffColor(name);
               return `<span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>`;
             }).join('') : '';
+            const scheduledCheck = isScheduled ? '<span style="color:#166534;font-size:12px;margin-left:4px" title="Scheduled/Sent">✓</span>' : '';
             return `
-              <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : ''}">
-                <div style="display:flex;align-items:flex-start;gap:4px;padding-top:1px">
-                  <span style="font-size:13px;font-weight:500">${client ? client.name : s.client_name}</span>
+              <div class="send-row" style="${hasConflict ? 'background:#fffbeb;border-left:3px solid #f59e0b;' : rowBg}">
+                <div style="display:flex;align-items:flex-start;gap:4px;padding-top:1px;flex-wrap:wrap">
+                  <span style="font-size:13px;font-weight:500">${client ? client.name : s.client_name}${scheduledCheck}</span>
                   ${assignedInitials ? `<span style="display:flex;gap:2px;flex-shrink:0;padding-top:2px">${assignedInitials}</span>` : ''}
                 </div>
                 <div class="send-type ${s.type}" style="padding-top:2px">${s.type === 'email' ? '✉ Email' : '📱 Text'}</div>
@@ -1029,9 +1115,8 @@ function renderSchedule() {
       </div>
     `;
   }).join('');
+  setTimeout(() => restoreUnsavedInputs(unsavedInputs), 0);
 }
-
-function formatTime(t) {
   if (!t) return '';
   const [h, m] = t.split(':').map(Number);
   const ampm = h >= 12 ? 'PM' : 'AM';
@@ -1137,6 +1222,40 @@ function applyCalViewingAs() {
   if (!input) return;
   viewingAs = input.value.trim() || 'Everyone';
   renderCalendar();
+}
+
+function setSendTypeFilter(type) {
+  sendTypeFilter = type;
+  document.querySelectorAll('#send-type-filter .sort-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('filter-' + type)?.classList.add('active');
+  renderSchedule();
+}
+
+function toggleApproverFilter() {
+  approverFilterOn = !approverFilterOn;
+  const btn = document.getElementById('approver-toggle-btn');
+  if (btn) { btn.style.background = approverFilterOn ? '#eef2ff' : ''; btn.style.color = approverFilterOn ? 'var(--navy)' : ''; }
+  renderSchedule();
+}
+
+function toggleHideScheduled() {
+  hideScheduled = !hideScheduled;
+  const btn = document.getElementById('hide-scheduled-btn');
+  if (btn) { btn.style.background = hideScheduled ? '#dcfce7' : ''; btn.style.color = hideScheduled ? '#166534' : ''; }
+  renderSchedule();
+}
+
+function resortByTime() {
+  // Re-sort sends in memory by their saved time for display
+  renderSchedule();
+}
+
+function toggleDayCollapse(date) {
+  collapsedDays[date] = !collapsedDays[date];
+  const body = document.getElementById('day-body-' + date);
+  const chevron = document.getElementById('day-chevron-' + date);
+  if (body) body.style.display = collapsedDays[date] ? 'none' : '';
+  if (chevron) chevron.style.transform = collapsedDays[date] ? 'rotate(-90deg)' : '';
 }
 
 async function syncMonday() {
@@ -1419,6 +1538,16 @@ const DISTRICT_CENTROIDS = {
 };
 
 let adminToolsVisible = false;
+let mapAllStates = false;
+
+function toggleMapAllStates() {
+  mapAllStates = !mapAllStates;
+  const btn = document.getElementById('map-all-states-btn');
+  if (btn) { btn.style.background = mapAllStates ? '#eef2ff' : ''; btn.style.color = mapAllStates ? 'var(--navy)' : ''; btn.textContent = mapAllStates ? 'Current State' : 'All States'; }
+  updateClientCount();
+  renderClientList();
+  renderMap();
+}
 function toggleAdminTools() {
   adminToolsVisible = !adminToolsVisible;
   const tools = document.getElementById('admin-tools');
@@ -1536,11 +1665,12 @@ async function saveNewClient() {
   const district = document.getElementById('add-district').value.trim();
   const pvi = document.getElementById('add-pvi').value.trim();
   const tag = document.getElementById('add-tag').value.trim();
+  const timezone = document.getElementById('add-timezone').value;
   const monday_board = document.getElementById('add-monday').value.trim();
   const notes = document.getElementById('add-notes').value.trim();
   if (!name || !district) { showToast('Name and district are required', 'error'); return; }
   if (office && !officeTypes.includes(office)) { await saveOfficeType(office); }
-  const newClient = { id: `c${Date.now()}`, name, state, office, district, pvi, tag, monday_board, notes, lat: null, lng: null };
+  const newClient = { id: `c${Date.now()}`, name, state, office, district, pvi, tag, timezone, monday_board, notes, lat: null, lng: null };
   const coords = await geocodeClient(state, office, district);
   if (coords) { newClient.lat = coords[0]; newClient.lng = coords[1]; }
   if (SUPABASE_CONFIGURED) {
@@ -1560,7 +1690,9 @@ async function saveNewClient() {
 function populateClientDropdown() {
   const sel = document.getElementById('evt-client');
   const current = sel.value;
-  sel.innerHTML = '<option value="">All / State-wide</option>' + stateClients().map(c => `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${c.name}</option>`).join('');
+  const scope = document.getElementById('evt-state-scope')?.value;
+  const clientPool = (scope === 'both' || calShowAllStates) ? clients : stateClients();
+  sel.innerHTML = '<option value="">All / State-wide</option>' + clientPool.map(c => `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${c.name} (${c.state})</option>`).join('');
 }
 
 // ============================================================
@@ -1571,9 +1703,10 @@ function filterAC(inputId, dropId, options) {
   const drop = document.getElementById(dropId);
   if (!input || !drop) return;
   const val = input.value.trim().toLowerCase();
-  const filtered = val ? options.filter(o => o.toLowerCase().includes(val)) : options;
-  if (!filtered.length) { drop.classList.remove('open'); drop.innerHTML = ''; return; }
-  drop.innerHTML = filtered.map(o =>
+  // Show all options when empty, "everyone", or no match — don't filter down to nothing
+  const filtered = (!val || val === 'everyone') ? options : options.filter(o => o.toLowerCase().includes(val));
+  const toShow = filtered.length ? filtered : options;
+  drop.innerHTML = toShow.map(o =>
     `<div class="autocomplete-option" onmousedown="selectAC('${inputId}','${dropId}','${o.replace(/'/g, "\'")}')">${o}</div>`
   ).join('');
   drop.classList.add('open');
@@ -1800,9 +1933,18 @@ async function processShapefiles() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Show loading state before any data arrives — prevents flash of empty or stale content
+  // Restore last tab and state from localStorage
+  try {
+    const savedState = localStorage.getItem('gc_state');
+    const savedTab = localStorage.getItem('gc_tab');
+    if (savedState && ['WI','KS'].includes(savedState)) currentState = savedState;
+    if (savedTab && ['map','schedule','calendar'].includes(savedTab)) currentTab = savedTab;
+  } catch(e) {}
   document.getElementById('client-list').innerHTML = '<div class="empty-state" id="loading-msg"><p>Loading clients...</p></div>';
   initMap();
+  // Apply restored tab
+  switchTab(currentTab);
+  renderStateTabs();
   if (SUPABASE_CONFIGURED) {
     await loadStatesFromSupabase();
     await loadClientsFromSupabase();
