@@ -109,7 +109,7 @@
   .day-label { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #fff; }
   .day-count { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.6); }
   .schedule-sends { background: var(--bg2); padding: 0; border: 1px solid var(--border); border-top: none; }
-  .send-row { display: grid; grid-template-columns: 200px 80px 100px 160px 1fr; align-items: start; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .send-row { display: grid; grid-template-columns: 200px 80px 100px 55px 150px 1fr; align-items: start; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
   .send-row:last-child { border-bottom: none; }
   .send-row:hover { background: var(--bg3); }
   .send-client { font-weight: 500; font-size: 13px; }
@@ -271,6 +271,7 @@
           <button class="sort-btn" id="sort-district" onclick="setSort('district')">District</button>
           <button class="sort-btn" id="sort-pvi" onclick="setSort('pvi')">Partisanship</button>
           <button class="sort-btn" id="sort-tag" onclick="setSort('tag')">Tag</button>
+          <button class="sort-btn" id="sort-timezone" onclick="setSort('timezone')">TZ</button>
         </div>
         <div class="legend">
           <div class="legend-item"><div class="legend-dot" style="background:#4a7cf0"></div>Mayor</div>
@@ -317,6 +318,10 @@
           <button class="sort-btn active" id="filter-all" onclick="setSendTypeFilter('all')">All</button>
           <button class="sort-btn" id="filter-email" onclick="setSendTypeFilter('email')">✉ Email</button>
           <button class="sort-btn" id="filter-text" onclick="setSendTypeFilter('text')">📱 Text</button>
+        </div>
+        <div style="position:relative">
+          <button class="btn btn-ghost btn-sm" id="tz-filter-btn" onclick="toggleTZDropdown()" style="font-size:11px">🕐 TZ</button>
+          <div id="tz-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1.5px solid var(--navy);border-radius:6px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:500;min-width:120px;padding:6px 0"></div>
         </div>
         <div style="position:relative">
           <button class="btn btn-ghost btn-sm" id="approver-toggle-btn" onclick="toggleApproverDropdown()" style="font-size:11px">👤 Approvers</button>
@@ -582,6 +587,7 @@ let selectedApprovers = new Set(); // which approvers are checked
 let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
 let sortByTime = false; // true only when Re-Sort by Time is active
+let tzFilter = new Set(); // which timezones to show (empty = all)
 const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Malinowski'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
@@ -722,7 +728,8 @@ function stateClients(forMap = false) {
 }
 
 function updateClientCount() {
-  document.getElementById('client-count-badge').textContent = `${stateClients().length} clients`;
+  const countPool = mapAllStates ? clients : stateClients();
+  document.getElementById('client-count-badge').textContent = `${countPool.length} client${countPool.length !== 1 ? 's' : ''}`;
 }
 
 // ============================================================
@@ -820,21 +827,23 @@ function sortedClients(sc) {
 
 function renderClientList() {
   const list = document.getElementById('client-list');
-  const sc = sortedClients(stateClients());
-  // Update sort button UI to reflect current state
+  // When all states visible, show all clients sorted alphabetically
+  const pool = mapAllStates ? [...clients].sort((a,b) => a.name.localeCompare(b.name)) : sortedClients(stateClients());
+  // Update sort button UI
   document.querySelectorAll('.sort-btn').forEach(b => {
     b.classList.remove('active','asc','desc');
     if (b.id === `sort-${clientSortField}`) b.classList.add('active', clientSortDir);
   });
-  if (!sc.length) { list.innerHTML = '<div class="empty-state"><p>No clients in this state.</p><p>Use "Add Client" to get started.</p></div>'; return; }
-  list.innerHTML = sc.map(c => `
+  if (!pool.length) { list.innerHTML = '<div class="empty-state"><p>No clients in this state.</p><p>Use "Add Client" to get started.</p></div>'; return; }
+  list.innerHTML = pool.map(c => `
     <div class="client-list-item ${c.id === selectedClientId ? 'selected' : ''}" onclick="openClientDetail('${c.id}')">
       <div class="client-name">${c.name}</div>
       <div class="client-meta">
         <span class="badge badge-office">${c.office}</span>
         ${(c.district && c.district.toUpperCase() !== 'N/A') ? `<span class="badge badge-district">${c.district}</span>` : ''}
-        ${c.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">${c.timezone}</span>` : ''}
-        ${c.pvi ? `<span class="badge" style="${pviBadgeStyle(c.pvi)}">${c.pvi} </span>` : ''}
+        ${mapAllStates && c.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">${c.timezone}</span>` : ''}
+        ${mapAllStates ? `<span class="badge badge-district" style="background:#eef2ff;color:var(--navy);border-color:#c7d2fe">${c.state}</span>` : ''}
+        ${c.pvi ? `<span class="badge" style="${pviBadgeStyle(c.pvi)}">${c.pvi}</span>` : ''}
         ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
       </div>
     </div>
@@ -1025,6 +1034,10 @@ function renderSchedule() {
       if (!names.some(n => selectedApprovers.has(n))) return false;
     }
     if (hideScheduled && s.status === 'Scheduled/Sent') return false;
+    if (tzFilter.size > 0) {
+      const client = clients.find(c => c.id === s.client_id);
+      if (!client || !tzFilter.has(client.timezone)) return false;
+    }
     return true;
   });
   const byDay = {};
@@ -1111,6 +1124,9 @@ function renderSchedule() {
                 </div>
                 <div class="send-type ${s.type}" style="padding-top:2px">${s.type === 'email' ? '✉ Email' : '📱 Text'}</div>
                 <div class="send-item-name" style="padding-top:2px">${s.item_name}${hasConflict ? ' <span style="font-family:var(--mono);font-size:10px;color:#b45309">⚠</span>' : ''}</div>
+                <div style="padding-top:2px">
+                  ${client && client.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0;font-size:10px">${client.timezone}</span>` : '<span style="font-size:11px;color:var(--text3)">—</span>'}
+                </div>
                 <div style="display:flex;gap:4px;align-items:flex-start">
                   <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 1030" style="flex:1;min-width:0">
                   <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
@@ -1307,6 +1323,42 @@ function toggleHideScheduled() {
   hideScheduled = !hideScheduled;
   const btn = document.getElementById('hide-scheduled-btn');
   if (btn) { btn.style.background = hideScheduled ? '#dcfce7' : ''; btn.style.color = hideScheduled ? '#166534' : ''; }
+  renderSchedule();
+}
+
+function toggleTZDropdown() {
+  const drop = document.getElementById('tz-dropdown');
+  if (!drop) return;
+  if (drop.style.display !== 'none') { drop.style.display = 'none'; return; }
+  // Build TZ list from current state clients
+  const tzList = [...new Set(stateClients().map(c => c.timezone).filter(Boolean))].sort();
+  if (!tzList.length) { showToast('No timezones set for current state clients', 'error'); return; }
+  drop.innerHTML = tzList.map(tz => `
+    <label style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='#eef2ff'" onmouseleave="this.style.background=''">
+      <input type="checkbox" ${tzFilter.has(tz) ? 'checked' : ''} onchange="toggleTZFilter('${tz}', this.checked)" style="accent-color:var(--navy)">
+      <span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:3px;padding:1px 6px;font-size:11px;font-family:var(--mono)">${tz}</span>
+    </label>`).join('') + `<div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px">
+      <button onclick="clearTZFilter()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;font-family:var(--mono)">Clear all</button>
+    </div>`;
+  drop.style.display = 'block';
+  setTimeout(() => {
+    const close = (e) => { if (!drop.contains(e.target) && e.target.id !== 'tz-filter-btn') { drop.style.display = 'none'; document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 0);
+}
+
+function toggleTZFilter(tz, checked) {
+  if (checked) tzFilter.add(tz); else tzFilter.delete(tz);
+  const btn = document.getElementById('tz-filter-btn');
+  if (btn) { btn.style.background = tzFilter.size > 0 ? '#eef2ff' : ''; btn.style.color = tzFilter.size > 0 ? 'var(--navy)' : ''; btn.textContent = tzFilter.size > 0 ? `🕐 TZ (${tzFilter.size})` : '🕐 TZ'; }
+  renderSchedule();
+}
+
+function clearTZFilter() {
+  tzFilter.clear();
+  const btn = document.getElementById('tz-filter-btn');
+  if (btn) { btn.style.background = ''; btn.style.color = ''; btn.textContent = '🕐 TZ'; }
+  document.getElementById('tz-dropdown').style.display = 'none';
   renderSchedule();
 }
 
