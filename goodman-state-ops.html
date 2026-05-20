@@ -272,7 +272,7 @@
   <div style="display:flex;align-items:center;gap:8px">
     <div style="position:relative">
       <button class="btn btn-ghost btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" style="font-size:13px">⚙ Settings</button>
-      <div id="settings-panel" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:2000;padding:16px">
+      <div id="settings-panel" onclick="event.stopPropagation()" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:2000;padding:16px">
         <!-- Settings panel content rendered by JS -->
       </div>
     </div>
@@ -359,7 +359,7 @@
         <!-- FILTER META MENU -->
         <div style="position:relative">
           <button class="btn btn-ghost btn-sm" id="filter-menu-btn" onclick="toggleMetaMenu('filter-menu')" style="font-size:11px;font-weight:600">⊟ Filter ▾</button>
-          <div id="filter-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:240px;padding:12px">
+          <div id="filter-menu" onclick="event.stopPropagation()" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:240px;padding:12px">
             <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Viewing As</div>
             <div class="autocomplete-wrapper" style="margin-bottom:10px">
               <input type="text" class="form-input" id="filter-menu-va" value="Everyone" autocomplete="off" style="padding:5px 10px;font-size:13px"
@@ -391,7 +391,7 @@
         <!-- SORT META MENU -->
         <div style="position:relative">
           <button class="btn btn-ghost btn-sm" id="sort-menu-btn" onclick="toggleMetaMenu('sort-menu')" style="font-size:11px;font-weight:600">⇅ Sort ▾</button>
-          <div id="sort-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:180px;padding:12px">
+          <div id="sort-menu" onclick="event.stopPropagation()" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:180px;padding:12px">
             <div style="display:flex;flex-direction:column;gap:6px">
               <button class="sort-btn" id="sort-time-btn" onclick="resortByTime();updateSortMenu()" style="text-align:left">⇅ Sort by Send Time</button>
               <button class="sort-btn" id="sort-tz-btn" onclick="toggleSortByTZ();updateSortMenu()" style="text-align:left">🕐 Sort by TZ</button>
@@ -1209,8 +1209,19 @@ function renderSchedule() {
 
       if (sortByApprover) {
         const getApproverRank = (s) => {
-          const names = (s.assigned_people || '').split(',').map(n => n.trim());
-          return Math.min(...names.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; }), 99);
+          const names = (s.assigned_people || '').split(',').map(n => n.trim()).filter(Boolean);
+          if (!names.length) return 99;
+          let pool;
+          if (names.length <= 2) {
+            // 1-2 people: the approver is whoever isn't NG/JM, or NG/JM if only one
+            pool = names.filter(n => !['Neil Goodman','Jacob Malinowski'].includes(n));
+            if (!pool.length) pool = names; // both are senior, use as-is
+          } else {
+            // 3+ people: ignore NG and JM, use the rest
+            pool = names.filter(n => !['Neil Goodman','Jacob Malinowski'].includes(n));
+            if (!pool.length) pool = names;
+          }
+          return Math.min(...pool.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; }), 99);
         };
         const diff = getApproverRank(a) - getApproverRank(b);
         if (diff !== 0) return diff;
@@ -1494,6 +1505,9 @@ function updateFilterMenu() {
   // Sync viewing as
   const vaEl = document.getElementById('filter-menu-va');
   if (vaEl) vaEl.value = viewingAs;
+  // Sync settings panel if open
+  const sp = document.getElementById('settings-panel');
+  if (sp && sp.style.display !== 'none') renderSettingsPanel();
 }
 
 function updateSortMenu() {
@@ -1526,6 +1540,10 @@ function resetAllFilters() {
   document.getElementById('filter-all')?.classList.add('active');
   updateFilterMenu(); updateSortMenu(); renderAll();
   showToast('All filters reset', 'success');
+  const fm = document.getElementById('filter-menu');
+  if (fm && fm.style.display !== 'none') updateFilterMenu();
+  const sm = document.getElementById('sort-menu');
+  if (sm && sm.style.display !== 'none') updateSortMenu();
 }
 
 function setSendTypeFilter(type) {
@@ -2397,7 +2415,17 @@ function toggleSettingsPanel() {
   if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
   renderSettingsPanel();
   panel.style.display = 'block';
-  // Settings stays open until user explicitly clicks Settings button again
+  // Close on outside click (stopPropagation on panel prevents inside clicks from closing)
+  setTimeout(() => {
+    const close = (e) => {
+      const btn = document.getElementById('settings-btn');
+      if (!panel.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+        panel.style.display = 'none';
+        document.removeEventListener('click', close);
+      }
+    };
+    document.addEventListener('click', close);
+  }, 0);
 }
 
 function renderSettingsPanel() {
