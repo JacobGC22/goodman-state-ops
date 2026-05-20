@@ -221,6 +221,9 @@
   .sort-btn.asc::after { content: ' ↑'; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); font-family: var(--mono); }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .district-tooltip { background: var(--navy) !important; color: #fff !important; border: none !important; font-family: var(--mono); font-size: 11px; }
+  .dark-mode { filter: invert(1) hue-rotate(180deg); }
+  .dark-mode img, .dark-mode .leaflet-tile { filter: invert(1) hue-rotate(180deg); }
 </style>
 </head>
 <body>
@@ -228,13 +231,17 @@
 <div class="header">
   <div class="header-left">
     <div class="logo">Goodman Campaigns / <span>State Ops</span></div>
-    <div class="state-tabs" id="state-tabs-container">
-      <button class="state-tab active" onclick="switchState('WI')">Wisconsin</button>
-      <button class="state-tab" onclick="switchState('KS')">Kansas</button>
-      <button class="state-tab" onclick="openAddState()" style="border-style:dashed;opacity:0.7">+ State</button>
-    </div>
   </div>
-  <button class="btn btn-ghost btn-sm" onclick="openAddClient()">+ Add Client</button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div style="position:relative">
+      <button class="btn btn-ghost btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" style="font-size:13px">⚙ Settings</button>
+      <div id="settings-panel" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:2000;padding:16px">
+        <!-- Settings panel content rendered by JS -->
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="openAddClient()">+ Add Client</button>
+    <button class="btn btn-ghost btn-sm" onclick="openAddState()" style="font-size:11px;opacity:0.6">+ State</button>
+  </div>
 </div>
 
 <div class="nav">
@@ -253,10 +260,9 @@
     <div class="map-sidebar">
       <div id="sidebar-list-view">
         <div class="sidebar-header">
-          <h2 id="sidebar-state-label">Wisconsin</h2>
+          <h2 id="sidebar-state-label">Clients</h2>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="client-count" id="client-count-badge">0 clients</span>
-            <button class="btn btn-ghost btn-sm" id="map-all-states-btn" onclick="toggleMapAllStates()" style="font-size:11px">All States</button>
             <button class="btn btn-ghost btn-sm" id="admin-toggle-btn" onclick="toggleAdminTools()" style="font-family:var(--mono);font-size:11px;border-color:rgba(0,0,0,0.2);color:var(--text3)">&#128274; Admin</button>
             <div id="admin-tools" style="display:none;align-items:center;gap:6px">
               <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" style="font-size:11px" title="Fix clients with missing pins">&#9679; Fix Pins</button>
@@ -300,7 +306,6 @@
         <span class="month-label" id="month-label"></span>
         <button onclick="changeMonth(1)">&#8594;</button>
       </div>
-      <h2 id="schedule-state-label">Wisconsin</h2>
       <div style="display:flex;align-items:center;gap:8px;margin-left:12px">
         <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">VIEWING AS</span>
         <div class="autocomplete-wrapper">
@@ -328,7 +333,7 @@
           <div id="approver-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:6px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:500;min-width:180px;padding:6px 0">
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times, earliest first" style="font-size:11px">⇅ Re-Sort by Time</button>
+        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times, earliest first" style="font-size:11px" id="sort-time-btn">⇅ Sort by Send Time</button>
         <button class="btn btn-ghost btn-sm" id="hide-scheduled-btn" onclick="toggleHideScheduled()" style="font-size:11px">✓ Hide Scheduled</button>
       </div>
       <div class="sync-btn">
@@ -350,8 +355,6 @@
           <span class="month-label" id="cal-month-label"></span>
           <button onclick="changeCalMonth(1)">&#8594;</button>
         </div>
-        <h2 id="calendar-state-label">Wisconsin</h2>
-        <button class="btn btn-ghost btn-sm" id="cal-all-states-btn" onclick="toggleCalAllStates()" style="margin-left:auto">Show All States</button>
         <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
           <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">VIEWING AS</span>
           <div class="autocomplete-wrapper">
@@ -562,7 +565,7 @@ const SUPABASE_CONFIGURED = true;
 // ============================================================
 // APP STATE — all data loaded from Supabase on init
 // ============================================================
-let currentState = 'WI';
+let currentState = 'ALL'; // ALL means show all states
 let currentTab = 'map';
 let scheduleMonth = new Date();
 scheduleMonth = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth(), 1);
@@ -588,6 +591,11 @@ let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
 let sortByTime = false; // true only when Re-Sort by Time is active
 let tzFilter = new Set(); // which timezones to show (empty = all)
+let activeStateFilter = new Set(); // empty = all states
+let currentStaffName = ''; // currently loaded staff profile
+let darkMode = false; // dark mode toggle
+let districtLayers = {}; // leaflet layers for district borders
+let districtBordersOn = { WI_AD: false, WI_SD: false, WI_CD: false, KS_HD: false, KS_SD: false };
 const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Malinowski'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
@@ -709,8 +717,60 @@ function switchTab(tab) {
   if (tab === 'map' && !mapInstance) initMap();
   else if (tab === 'map') { setTimeout(() => mapInstance && mapInstance.invalidateSize(), 50); renderMap(); }
   if (tab === 'map') checkShapefileWarning();
-  if (tab === 'schedule') renderSchedule();
-  if (tab === 'calendar') renderCalendar();
+  if (tab === 'schedule') { renderSchedule(); autoSync(); }
+  if (tab === 'calendar') { renderCalendar(); autoSync(); }
+}
+
+async function autoSync() {
+  const sc = clients.filter(c => c.monday_board);
+  if (!sc.length || !SUPABASE_CONFIGURED) return;
+  // Sync silently in background — don't show status or block UI
+  try {
+    const year = scheduleMonth.getFullYear();
+    const month = scheduleMonth.toLocaleString('default', { month: 'long' });
+    const nextMonthDate = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + 1, 1);
+    const groupTargets = [
+      `${month} ${year}`,
+      `${nextMonthDate.toLocaleString('default', { month: 'long' })} ${nextMonthDate.getFullYear()}`
+    ];
+    const allFetches = sc.map(client =>
+      fetch(MONDAY_EDGE_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ board_id: client.monday_board, group_targets: groupTargets, client_id: client.id, client_name: client.name.split(' ')[1] || client.name })
+      }).then(r => r.json()).catch(() => ({ sends: [] }))
+    );
+    const allResults = await Promise.all(allFetches);
+    const results = allResults.flatMap(r => r.sends || []);
+    const saveOps = results.map(async s => {
+      const existing = sends.find(x => x.monday_id === s.monday_id);
+      if (!existing) {
+        const client = clients.find(c => c.id === s.client_id);
+        s.state = client ? client.state : 'WI';
+        const { time: _t, ...sendToSave } = s;
+        if (!sendToSave.status) sendToSave.status = '';
+        const saved = await sbFetch('sends', 'POST', sendToSave);
+        if (saved !== null) sends.push(s);
+      } else {
+        const updates = {};
+        if (existing.date !== s.date) updates.date = s.date;
+        if (s.note !== undefined && s.note !== existing.note) updates.note = s.note;
+        if (s.assigned_people !== undefined && s.assigned_people !== existing.assigned_people) updates.assigned_people = s.assigned_people;
+        if (s.status !== undefined && s.status !== existing.status) updates.status = s.status;
+        if (Object.keys(updates).length) { await sbFetch(`sends?monday_id=eq.${s.monday_id}`, 'PATCH', updates); Object.assign(existing, updates); }
+      }
+      if (s.time) {
+        const sendId = s.id;
+        const existingTime = await sbFetch(`send_times?monday_item_id=eq.${sendId}&select=send_time`);
+        if (existingTime && existingTime.length) {
+          if (existingTime[0].send_time !== s.time) { await sbFetch(`send_times?monday_item_id=eq.${sendId}`, 'PATCH', { send_time: s.time, updated_at: new Date().toISOString() }); editedTimes[sendId] = s.time; }
+        } else { await sbFetch('send_times', 'POST', { monday_item_id: sendId, send_time: s.time, updated_at: new Date().toISOString() }); editedTimes[sendId] = s.time; }
+      }
+    });
+    await Promise.all(saveOps);
+    renderSchedule();
+    renderCalendar();
+  } catch(e) { console.warn('Auto-sync failed:', e); }
 }
 
 function renderAll() {
@@ -724,6 +784,7 @@ function renderAll() {
 
 function stateClients(forMap = false) {
   if (forMap && mapAllStates) return clients;
+  if (currentState === 'ALL') return clients;
   return clients.filter(c => c.state === currentState);
 }
 
@@ -842,7 +903,7 @@ function renderClientList() {
         <span class="badge badge-office">${c.office}</span>
         ${(c.district && c.district.toUpperCase() !== 'N/A') ? `<span class="badge badge-district">${c.district}</span>` : ''}
         ${mapAllStates && c.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">${c.timezone}</span>` : ''}
-        ${mapAllStates ? `<span class="badge badge-district" style="background:#eef2ff;color:var(--navy);border-color:#c7d2fe">${c.state}</span>` : ''}
+        ${mapAllStates ? `<span class="badge badge-district" style="background:${ c.state === "WI" ? "#dbeafe" : "#fef3c7"};color:${ c.state === "WI" ? "#1e40af" : "#b45309"};border-color:${ c.state === "WI" ? "#93c5fd" : "#fcd34d"}">${c.state}</span>` : ''}
         ${c.pvi ? `<span class="badge" style="${pviBadgeStyle(c.pvi)}">${c.pvi}</span>` : ''}
         ${c.tag ? `<span class="badge badge-district">${c.tag}</span>` : ''}
       </div>
@@ -1014,7 +1075,10 @@ function renderSchedule() {
   label.textContent = scheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
   const year = scheduleMonth.getFullYear();
   const month = scheduleMonth.getMonth();
-  const sc = stateClients();
+  // Apply state filter from settings
+  const sc = activeStateFilter.size > 0
+    ? clients.filter(c => activeStateFilter.has(c.state))
+    : clients;
   const clientIds = sc.map(c => c.id);
   const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1098,7 +1162,7 @@ function renderSchedule() {
             const currentTime = editedTimes[s.id] || s.time || '';
             const client = clients.find(c => c.id === s.client_id);
             const isScheduled = s.status === 'Scheduled/Sent';
-            const rowBg = isScheduled ? 'background:#f0fdf4;' : (rowIdx % 2 === 1 ? 'background:var(--bg3);' : '');
+            const rowBg = isScheduled ? 'background:#bbf7d0;' : (rowIdx % 2 === 1 ? 'background:var(--bg3);' : '');
             const hasConflict = currentTime && daySends.some(other => {
               if (other.id === s.id) return false;
               if (other.type !== s.type) return false;
@@ -1128,14 +1192,14 @@ function renderSchedule() {
                   ${client && client.timezone ? `<span class="badge badge-district" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0;font-size:10px">${client.timezone}</span>` : '<span style="font-size:11px;color:var(--text3)">—</span>'}
                 </div>
                 <div style="display:flex;gap:4px;align-items:flex-start">
-                  <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="e.g. 1030" style="flex:1;min-width:0">
-                  <button class="time-save-btn" onclick="saveTime('${s.id}')">Save</button>
+                  <input type="text" class="time-input" id="time-${s.id}" value="${currentTime}" placeholder="Time" style="flex:1;min-width:0">
+                  <button class="time-save-btn" onclick="saveTime('${s.id}')">Sync</button>
                 </div>
                 <div style="display:flex;gap:4px;align-items:flex-start">
-                  <textarea class="send-note-input" id="note-${s.id}" placeholder="Note (syncs to Monday)"
+                  <textarea class="send-note-input" id="note-${s.id}" placeholder="Note"
                     style="flex:1;min-width:0;min-height:26px;height:26px;overflow:hidden;resize:none;"
                     oninput="this.style.height='26px';this.style.height=this.scrollHeight+'px'">${currentNote}</textarea>
-                  <button class="time-save-btn" onclick="saveNote('${s.id}')">Save</button>
+                  <button class="time-save-btn" onclick="saveNote('${s.id}')">Sync</button>
                 </div>
               </div>`;
           }).join('')}
@@ -1364,7 +1428,7 @@ function clearTZFilter() {
 
 function resortByTime() {
   sortByTime = !sortByTime;
-  const btn = document.querySelector('[onclick="resortByTime()"]');
+  const btn = document.getElementById('sort-time-btn');
   if (btn) { btn.style.background = sortByTime ? '#eef2ff' : ''; btn.style.color = sortByTime ? 'var(--navy)' : ''; }
   renderSchedule();
 }
@@ -1461,7 +1525,7 @@ async function syncMonday() {
 // ============================================================
 // CALENDAR
 // ============================================================
-let calShowAllStates = false;
+let calShowAllStates = true; // default all states
 
 function toggleCalAllStates() {
   calShowAllStates = !calShowAllStates;
@@ -1659,7 +1723,7 @@ const DISTRICT_CENTROIDS = {
 };
 
 let adminToolsVisible = false;
-let mapAllStates = false;
+let mapAllStates = true; // default all states
 
 function toggleMapAllStates() {
   mapAllStates = !mapAllStates;
@@ -1669,6 +1733,50 @@ function toggleMapAllStates() {
   renderClientList();
   renderMap();
 }
+async function toggleDistrictBorder(key) {
+  districtBordersOn[key] = !districtBordersOn[key];
+  if (!districtBordersOn[key]) {
+    if (districtLayers[key]) { mapInstance.removeLayer(districtLayers[key]); delete districtLayers[key]; }
+    return;
+  }
+  // Load from Supabase if not cached
+  if (!window._districtGeoJSON) window._districtGeoJSON = {};
+  if (!window._districtGeoJSON[key]) {
+    const [state, type] = key.split('_');
+    const data = await sbFetch(`district_borders?state=eq.${state}&type=eq.${type}&select=geojson`);
+    if (!data || !data.length) {
+      // Try to use hardcoded centroids as fallback — borders not uploaded
+      showToast(`No border data for ${key}. Upload GeoJSON via shapefile upload.`, 'error');
+      districtBordersOn[key] = false;
+      return;
+    }
+    window._districtGeoJSON[key] = JSON.parse(data[0].geojson);
+  }
+  const BORDER_COLORS = { WI_AD: '#1dc8a0', WI_SD: '#9b6dff', WI_CD: '#f0a500', KS_HD: '#1dc8a0', KS_SD: '#9b6dff' };
+  const color = BORDER_COLORS[key] || '#888';
+  districtLayers[key] = L.geoJSON(window._districtGeoJSON[key], {
+    style: { color, weight: 1.5, fillOpacity: 0.08, fillColor: color },
+    onEachFeature: (feature, layer) => {
+      const props = feature.properties || {};
+      const numProp = ['SLDLST','SLDUST','CON2021','DISTRICT'].find(k => props[k] !== undefined);
+      const num = numProp ? parseInt(props[numProp]) : null;
+      if (num) {
+        layer.bindTooltip(`${key.replace('_',' ')} ${num}`, { permanent: false, sticky: true, className: 'district-tooltip' });
+        layer.on('click', () => {
+          // Find client in this district
+          const prefix = key.includes('AD') || key.includes('HD') ? '' : '';
+          const districtStr = num.toString();
+          const match = clients.find(c => {
+            const d = (c.district || '').replace(/[^0-9]/g,'');
+            return d === districtStr && c.state === key.split('_')[0];
+          });
+          if (match) openClientDetail(match.id);
+        });
+      }
+    }
+  }).addTo(mapInstance);
+}
+
 function toggleAdminTools() {
   adminToolsVisible = !adminToolsVisible;
   const tools = document.getElementById('admin-tools');
@@ -1948,11 +2056,7 @@ async function loadSendsFromSupabase() {
 // STATE MANAGEMENT
 // ============================================================
 function renderStateTabs() {
-  const container = document.getElementById('state-tabs-container');
-  if (!container) return;
-  container.innerHTML = activeStates.map(s =>
-    `<button class="state-tab ${s === currentState ? 'active' : ''}" onclick="switchState('${s}')">${STATE_NAMES[s] || s}</button>`
-  ).join('') + `<button class="state-tab" onclick="openAddState()" style="border-style:dashed;opacity:0.7">+ State</button>`;
+  // State tabs removed — now handled via settings panel
 }
 
 function checkShapefileWarning() {
@@ -2045,6 +2149,12 @@ async function processShapefiles() {
     if (SUPABASE_CONFIGURED) {
       await sbFetch('state_centroids', 'POST', { id: key, state: currentState, type: suffix, centroids: JSON.stringify(centroids) });
     }
+    // Also save full GeoJSON to district_borders table for map rendering
+    if (SUPABASE_CONFIGURED) {
+      const [fileState, fileType] = key.split('_');
+      await sbFetch('district_borders', 'POST', { id: key, state: fileState, type: fileType, geojson: JSON.stringify(geojson) })
+        .catch(e => console.warn('Failed to save border GeoJSON:', e));
+    }
     results.push(`${key}: ${Object.keys(centroids).length} districts`);
   };
   await processFile(houseFile, 'HD');
@@ -2056,12 +2166,222 @@ async function processShapefiles() {
   showToast('Shapefiles processed', 'success');
 }
 
+// ============================================================
+// SETTINGS PANEL
+// ============================================================
+function toggleSettingsPanel() {
+  const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  renderSettingsPanel();
+  panel.style.display = 'block';
+  setTimeout(() => {
+    const close = (e) => {
+      const btn = document.getElementById('settings-btn');
+      if (!panel.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+        panel.style.display = 'none';
+        document.removeEventListener('click', close);
+      }
+    };
+    document.addEventListener('click', close);
+  }, 0);
+}
+
+function renderSettingsPanel() {
+  const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+  const tzOptions = [...new Set(clients.map(c => c.timezone).filter(Boolean))].sort();
+  const stateOptions = [...new Set(clients.map(c => c.state).filter(Boolean))].sort();
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em">Settings</div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Staff Profile</div>
+      <div style="display:flex;gap:6px">
+        <div class="autocomplete-wrapper" style="flex:1">
+          <input type="text" class="form-input" id="settings-staff-input" value="${currentStaffName}" placeholder="Your name" autocomplete="off" style="padding:6px 10px;font-size:13px"
+            oninput="filterAC('settings-staff-input','settings-staff-drop',getStaffList())"
+            onfocus="filterAC('settings-staff-input','settings-staff-drop',getStaffList())"
+            onblur="closeACDelayed('settings-staff-drop')"
+            onclick="filterAC('settings-staff-input','settings-staff-drop',getStaffList())"
+            onkeydown="handleACKey(event,'settings-staff-drop','settings-staff-input')">
+          <div class="autocomplete-dropdown" id="settings-staff-drop"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadStaffSettings()">Load</button>
+        <button class="btn btn-primary btn-sm" onclick="saveStaffSettings()">Save</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">View As</div>
+      <div class="autocomplete-wrapper">
+        <input type="text" class="form-input" id="settings-viewing-as" value="${viewingAs}" placeholder="Everyone" autocomplete="off" style="padding:6px 10px;font-size:13px"
+          oninput="filterAC('settings-viewing-as','settings-va-drop',getStaffList())"
+          onfocus="filterAC('settings-viewing-as','settings-va-drop',getStaffList())"
+          onclick="filterAC('settings-viewing-as','settings-va-drop',getStaffList())"
+          onblur="closeACDelayed('settings-va-drop');applySettingsViewingAs()"
+          onkeydown="handleACKey(event,'settings-va-drop','settings-viewing-as')">
+        <div class="autocomplete-dropdown" id="settings-va-drop"></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">States</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="sort-btn ${activeStateFilter.size === 0 ? 'active' : ''}" onclick="setStateFilter('ALL')">All</button>
+        ${stateOptions.map(s => `<button class="sort-btn ${activeStateFilter.has(s) ? 'active' : ''}" onclick="setStateFilter('${s}')" style="background:${activeStateFilter.has(s) ? (s === 'WI' ? '#1e40af' : '#b45309') : ''};color:${activeStateFilter.has(s) ? '#fff' : ''};border-color:${activeStateFilter.has(s) ? (s === 'WI' ? '#1e40af' : '#b45309') : ''}">${s}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Send Type</div>
+      <div style="display:flex;gap:4px">
+        <button class="sort-btn ${sendTypeFilter === 'all' ? 'active' : ''}" onclick="setSendTypeFilter('all');renderSettingsPanel()">All</button>
+        <button class="sort-btn ${sendTypeFilter === 'email' ? 'active' : ''}" onclick="setSendTypeFilter('email');renderSettingsPanel()">✉ Email</button>
+        <button class="sort-btn ${sendTypeFilter === 'text' ? 'active' : ''}" onclick="setSendTypeFilter('text');renderSettingsPanel()">📱 Text</button>
+      </div>
+    </div>
+
+    ${tzOptions.length ? `<div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Timezone</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="sort-btn ${tzFilter.size === 0 ? 'active' : ''}" onclick="clearTZFilter();renderSettingsPanel()">All</button>
+        ${tzOptions.map(tz => `<button class="sort-btn ${tzFilter.has(tz) ? 'active' : ''}" onclick="toggleTZFilter('${tz}',${!tzFilter.has(tz)});renderSettingsPanel()" style="background:${tzFilter.has(tz) ? '#f0fdf4' : ''};color:${tzFilter.has(tz) ? '#166534' : ''};border-color:${tzFilter.has(tz) ? '#bbf7d0' : ''}">${tz}</button>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Approvers</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${APPROVERS.map(name => {
+          const checked = selectedApprovers.has(name);
+          const color = staffColor(name);
+          const initials = name.split(' ').filter(Boolean).map(w => w[0].toUpperCase()).join('');
+          return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleApprover('${name.replace(/'/g,"\'")}',this.checked);renderSettingsPanel()" style="accent-color:var(--navy)">
+            <span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>
+            <span>${name}</span>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      <button class="sort-btn ${hideScheduled ? 'active' : ''}" onclick="toggleHideScheduled();renderSettingsPanel()">✓ Hide Scheduled</button>
+      <button class="sort-btn ${sortByTime ? 'active' : ''}" onclick="resortByTime();renderSettingsPanel()">⇅ Sort by Send Time</button>
+      <button class="sort-btn ${darkMode ? 'active' : ''}" onclick="toggleDarkMode();renderSettingsPanel()">🌙 Dark Mode</button>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">District Borders</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${Object.keys(districtBordersOn).map(key => `<button class="sort-btn ${districtBordersOn[key] ? 'active' : ''}" onclick="toggleDistrictBorder('${key}');renderSettingsPanel()">${key.replace('_',' ')}</button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function applySettingsViewingAs() {
+  const input = document.getElementById('settings-viewing-as');
+  if (!input) return;
+  const val = input.value.trim();
+  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
+  // Sync to other viewing-as inputs
+  ['viewing-as-input','cal-viewing-as-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = viewingAs;
+  });
+  renderSchedule();
+  renderCalendar();
+}
+
+function setStateFilter(state) {
+  if (state === 'ALL') {
+    activeStateFilter.clear();
+    currentState = 'ALL';
+    mapAllStates = true;
+    calShowAllStates = true;
+  } else {
+    if (activeStateFilter.has(state) && activeStateFilter.size === 1) {
+      activeStateFilter.clear();
+      currentState = 'ALL';
+      mapAllStates = true;
+      calShowAllStates = true;
+    } else if (activeStateFilter.has(state)) {
+      activeStateFilter.delete(state);
+      if (activeStateFilter.size === 1) { currentState = [...activeStateFilter][0]; mapAllStates = false; calShowAllStates = false; }
+    } else {
+      activeStateFilter.add(state);
+      if (activeStateFilter.size === 1) { currentState = state; mapAllStates = false; calShowAllStates = false; }
+      else { currentState = 'ALL'; mapAllStates = true; calShowAllStates = true; }
+    }
+  }
+  try { localStorage.setItem('gc_state', currentState); } catch(e) {}
+  updateClientCount();
+  renderClientList();
+  renderMap();
+  renderSchedule();
+  renderCalendar();
+  renderSettingsPanel();
+}
+
+function toggleDarkMode() {
+  darkMode = !darkMode;
+  document.body.classList.toggle('dark-mode', darkMode);
+}
+
+async function saveStaffSettings() {
+  const nameInput = document.getElementById('settings-staff-input');
+  const name = nameInput?.value.trim();
+  if (!name) { showToast('Enter your name first', 'error'); return; }
+  currentStaffName = name;
+  const settings = {
+    viewingAs, sendTypeFilter, tzFilter: [...tzFilter], selectedApprovers: [...selectedApprovers],
+    hideScheduled, sortByTime, darkMode, activeStateFilter: [...activeStateFilter],
+  };
+  if (SUPABASE_CONFIGURED) {
+    const existing = await sbFetch(`staff_settings?name=eq.${encodeURIComponent(name)}&select=name`);
+    if (existing && existing.length) {
+      await sbFetch(`staff_settings?name=eq.${encodeURIComponent(name)}`, 'PATCH', { settings, updated_at: new Date().toISOString() });
+    } else {
+      await sbFetch('staff_settings', 'POST', { name, settings });
+    }
+  }
+  try { localStorage.setItem('gc_staff', name); } catch(e) {}
+  showToast(`Settings saved for ${name}`, 'success');
+}
+
+async function loadStaffSettings() {
+  const nameInput = document.getElementById('settings-staff-input');
+  const name = nameInput?.value.trim() || currentStaffName;
+  if (!name) { showToast('Enter your name first', 'error'); return; }
+  if (!SUPABASE_CONFIGURED) { showToast('Supabase required for saved settings', 'error'); return; }
+  const data = await sbFetch(`staff_settings?name=eq.${encodeURIComponent(name)}&select=settings`);
+  if (!data || !data.length) { showToast(`No saved settings for ${name}`, 'error'); return; }
+  const s = data[0].settings;
+  currentStaffName = name;
+  if (s.viewingAs) { viewingAs = s.viewingAs; ['viewing-as-input','cal-viewing-as-input'].forEach(id => { const el = document.getElementById(id); if (el) el.value = viewingAs; }); }
+  if (s.sendTypeFilter) setSendTypeFilter(s.sendTypeFilter);
+  if (s.tzFilter) { tzFilter = new Set(s.tzFilter); }
+  if (s.selectedApprovers) { selectedApprovers = new Set(s.selectedApprovers); approverFilterOn = selectedApprovers.size > 0; }
+  if (typeof s.hideScheduled === 'boolean') { hideScheduled = s.hideScheduled; }
+  if (typeof s.sortByTime === 'boolean') { sortByTime = s.sortByTime; }
+  if (typeof s.darkMode === 'boolean') { darkMode = s.darkMode; document.body.classList.toggle('dark-mode', darkMode); }
+  if (s.activeStateFilter) { activeStateFilter = new Set(s.activeStateFilter); if (activeStateFilter.size === 1) { currentState = [...activeStateFilter][0]; mapAllStates = false; calShowAllStates = false; } }
+  try { localStorage.setItem('gc_staff', name); } catch(e) {}
+  renderAll();
+  renderSettingsPanel();
+  showToast(`Settings loaded for ${name}`, 'success');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Restore last tab and state from localStorage
   try {
     const savedState = localStorage.getItem('gc_state');
     const savedTab = localStorage.getItem('gc_tab');
-    if (savedState && ['WI','KS'].includes(savedState)) currentState = savedState;
+    if (savedState) currentState = savedState;
+    const savedStaff = localStorage.getItem('gc_staff');
+    if (savedStaff) currentStaffName = savedStaff;
     if (savedTab && ['map','schedule','calendar'].includes(savedTab)) currentTab = savedTab;
   } catch(e) {}
   document.getElementById('client-list').innerHTML = '<div class="empty-state" id="loading-msg"><p>Loading clients...</p></div>';
