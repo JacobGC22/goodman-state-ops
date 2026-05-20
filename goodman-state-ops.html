@@ -593,8 +593,12 @@
       <span class="modal-title">Upload District Shapefiles</span>
       <button class="modal-close" onclick="closeShapefileModal()">&times;</button>
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload GeoJSON files for <strong id="shapefile-modal-state"></strong> legislative districts. Download from your state's GIS hub as GeoJSON.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload GeoJSON files for legislative districts. Download from your state's GIS hub as GeoJSON.</p>
     <div class="add-event-form">
+      <div class="form-field">
+        <label>State</label>
+        <input type="text" class="form-input" id="shapefile-state-input" placeholder="e.g. WI, KS, IL" maxlength="3" style="text-transform:uppercase;width:100px">
+      </div>
       <div class="form-field">
         <label>House / Assembly Districts GeoJSON</label>
         <input type="file" class="form-input" id="shapefile-house" accept=".geojson,.json">
@@ -2406,7 +2410,10 @@ async function processShapefiles() {
       if (centroid) centroids[num] = centroid;
     }
 
-    const key = `${currentState}_${suffix}`;
+    const stateInput = document.getElementById('shapefile-state-input');
+    const fileState = (stateInput?.value.trim().toUpperCase()) || currentState;
+    if (!fileState || fileState === 'ALL') { showToast('Enter a state abbreviation first', 'error'); return; }
+    const key = `${fileState}_${suffix}`;
     DISTRICT_CENTROIDS[key] = centroids;
     // Store GeoJSON in memory for border rendering — don't send to Supabase (too large)
     if (!window._districtGeoJSON) window._districtGeoJSON = {};
@@ -2429,7 +2436,8 @@ async function processShapefiles() {
   await processFile(senateFile, 'SD');
   await processFile(congressFile, 'CD');
 
-  if (!STATES_WITH_CENTROIDS.includes(currentState)) STATES_WITH_CENTROIDS.push(currentState);
+  const uploadedState = document.getElementById('shapefile-state-input')?.value.trim().toUpperCase();
+  if (uploadedState && !STATES_WITH_CENTROIDS.includes(uploadedState)) STATES_WITH_CENTROIDS.push(uploadedState);
   status.textContent = 'Done: ' + results.join(', ');
   checkShapefileWarning();
   showToast('Shapefiles processed — ' + results.join(', '), 'success');
