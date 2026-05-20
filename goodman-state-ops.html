@@ -2406,7 +2406,7 @@ async function processShapefiles() {
       if (centroid) centroids[num] = centroid;
     }
 
-    const key = \`\${currentState}_\${suffix}\`;
+    const key = `${currentState}_${suffix}`;
     DISTRICT_CENTROIDS[key] = centroids;
     // Store GeoJSON in memory for border rendering — don't send to Supabase (too large)
     if (!window._districtGeoJSON) window._districtGeoJSON = {};
@@ -2414,15 +2414,15 @@ async function processShapefiles() {
 
     // Save only the compact centroid data to Supabase
     if (SUPABASE_CONFIGURED) {
-      status.textContent = \`Saving \${key} centroids to Supabase...\`;
-      const existing = await sbFetch(\`state_centroids?id=eq.\${key}&select=id\`);
+      status.textContent = `Saving ${key} centroids to Supabase...`;
+      const existing = await sbFetch(`state_centroids?id=eq.${key}&select=id`);
       if (existing && existing.length) {
-        await sbFetch(\`state_centroids?id=eq.\${key}\`, 'PATCH', { centroids: JSON.stringify(centroids) });
+        await sbFetch(`state_centroids?id=eq.${key}`, 'PATCH', { centroids: JSON.stringify(centroids) });
       } else {
         await sbFetch('state_centroids', 'POST', { id: key, state: currentState, type: suffix, centroids: JSON.stringify(centroids) });
       }
     }
-    results.push(\`\${key}: \${Object.keys(centroids).length} districts\`);
+    results.push(`${key}: ${Object.keys(centroids).length} districts`);
   };
 
   await processFile(houseFile, 'HD');
