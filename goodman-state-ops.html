@@ -301,9 +301,10 @@
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="client-count" id="client-count-badge">0 clients</span>
             <button class="btn btn-ghost btn-sm" id="admin-toggle-btn" onclick="toggleAdminTools()" style="font-family:var(--mono);font-size:11px;border-color:rgba(0,0,0,0.2);color:var(--text3)">&#128274; Admin</button>
-            <div id="admin-tools" style="display:none;align-items:center;gap:6px">
+            <div id="admin-tools" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" id="geocode-btn" onclick="geocodeMissingPins()" style="font-size:11px" title="Fix clients with missing pins">&#9679; Fix Pins</button>
               <button class="btn btn-ghost btn-sm" id="regeocode-btn" onclick="regeocodeAllPins()" style="font-size:11px" title="Re-geocode all pins">&#8635; Re-geocode All</button>
+              <button class="btn btn-ghost btn-sm" onclick="openShapefileUpload(event)" style="font-size:11px" title="Upload district shapefiles">&#9651; Shapefiles</button>
             </div>
           </div>
         </div>
@@ -2351,8 +2352,7 @@ async function loadStatesFromSupabase() {
 
 // Shapefile upload
 function openShapefileUpload(e) {
-  e.preventDefault();
-  document.getElementById('shapefile-modal-state').textContent = STATE_NAMES[currentState] || currentState;
+  if (e) e.preventDefault();
   document.getElementById('shapefile-modal').classList.add('open');
 }
 function closeShapefileModal() { document.getElementById('shapefile-modal').classList.remove('open'); }
