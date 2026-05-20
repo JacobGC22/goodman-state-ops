@@ -230,6 +230,9 @@
     --green: #2ecc71; --amber: #f0a500; --red: #e24b4a;
   }
   .dark-mode body { background: var(--bg); color: var(--text); }
+  .dark-mode .send-row { background: var(--bg2) !important; color: var(--text) !important; }
+  .dark-mode .send-row:nth-child(odd) { background: var(--bg3) !important; }
+  .dark-mode .send-row[style*="fffbeb"] { background: #3a2a0a !important; border-left-color: #f0a500 !important; }
   .dark-mode .header { background: #0a0c11; }
   .dark-mode .nav { background: var(--bg2); }
   .dark-mode .map-sidebar, .dark-mode .event-panel, .dark-mode .modal,
@@ -241,15 +244,21 @@
   .dark-mode .autocomplete-option { color: var(--text) !important; }
   .dark-mode .autocomplete-option:hover { background: var(--bg3) !important; }
   .dark-mode .schedule-day-header { background: #1e3a8a !important; }
-  .dark-mode .schedule-sends, .dark-mode .send-row:nth-child(even) { background: var(--bg3); }
+  .dark-mode .schedule-sends { background: var(--bg2); }
+  .dark-mode [style*="background:#bbf7d0"] { background: #1a3a2a !important; border-left-color: #2ecc71 !important; }
+  .dark-mode [style*="background:var(--bg3)"] { background: #1c2030 !important; }
   .dark-mode .cal-cell { background: var(--bg2); }
+  .dark-mode .cal-event { filter: brightness(1.6) saturate(0.9) !important; color: #fff !important; }
   .dark-mode .cal-day-name { background: #1e3a8a !important; }
   .dark-mode .leaflet-popup-content-wrapper { background: var(--bg2) !important; color: var(--text) !important; }
   .dark-mode .btn-ghost { background: var(--bg3); color: var(--text2); border-color: var(--border2); }
   .dark-mode .sort-btn { background: var(--bg3); color: var(--text2); border-color: var(--border2); }
   .dark-mode .sort-btn.active { background: var(--navy); color: #fff; }
   .dark-mode .client-list-item { border-color: var(--border); }
+  .dark-mode .client-name { color: var(--text) !important; }
+  .dark-mode .send-client span { color: var(--text) !important; }
   .dark-mode .client-list-item:hover { background: var(--bg3); }
+  .dark-mode .assigned-pill { filter: brightness(1.8) saturate(0.8) !important; color: #fff !important; }
   .dark-mode .sidebar-header { background: var(--bg3); }
   .dark-mode .toast { background: var(--bg2); }
 </style>
@@ -346,23 +355,53 @@
           <div class="autocomplete-dropdown" id="viewing-as-drop"></div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
-        <div style="display:flex;gap:3px" id="send-type-filter">
-          <button class="sort-btn active" id="filter-all" onclick="setSendTypeFilter('all')">All</button>
-          <button class="sort-btn" id="filter-email" onclick="setSendTypeFilter('email')">✉ Email</button>
-          <button class="sort-btn" id="filter-text" onclick="setSendTypeFilter('text')">📱 Text</button>
-        </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap">
+        <!-- FILTER META MENU -->
         <div style="position:relative">
-          <button class="btn btn-ghost btn-sm" id="tz-filter-btn" onclick="toggleTZDropdown()" style="font-size:11px">🕐 TZ</button>
-          <div id="tz-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1.5px solid var(--navy);border-radius:6px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:500;min-width:120px;padding:6px 0"></div>
-        </div>
-        <div style="position:relative">
-          <button class="btn btn-ghost btn-sm" id="approver-toggle-btn" onclick="toggleApproverDropdown()" style="font-size:11px">👤 Approvers</button>
-          <div id="approver-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:6px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:500;min-width:180px;padding:6px 0">
+          <button class="btn btn-ghost btn-sm" id="filter-menu-btn" onclick="toggleMetaMenu('filter-menu')" style="font-size:11px;font-weight:600">⊟ Filter ▾</button>
+          <div id="filter-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:240px;padding:12px">
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Viewing As</div>
+            <div class="autocomplete-wrapper" style="margin-bottom:10px">
+              <input type="text" class="form-input" id="filter-menu-va" value="Everyone" autocomplete="off" style="padding:5px 10px;font-size:13px"
+                oninput="filterAC('filter-menu-va','filter-menu-va-drop',getStaffList())"
+                onfocus="filterAC('filter-menu-va','filter-menu-va-drop',getStaffList())"
+                onclick="filterAC('filter-menu-va','filter-menu-va-drop',getStaffList())"
+                onblur="closeACDelayed('filter-menu-va-drop');applyMenuViewingAs()"
+                onkeydown="handleACKey(event,'filter-menu-va-drop','filter-menu-va')">
+              <div class="autocomplete-dropdown" id="filter-menu-va-drop"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">States</div>
+            <div id="filter-menu-states" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px"></div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Send Type</div>
+            <div style="display:flex;gap:3px;margin-bottom:10px" id="send-type-filter">
+              <button class="sort-btn active" id="filter-all" onclick="setSendTypeFilter('all')">All</button>
+              <button class="sort-btn" id="filter-email" onclick="setSendTypeFilter('email')">✉ Email</button>
+              <button class="sort-btn" id="filter-text" onclick="setSendTypeFilter('text')">📱 Text</button>
+            </div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Timezone</div>
+            <div id="filter-menu-tz" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px"></div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Approvers</div>
+            <div id="filter-menu-approvers" style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px"></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="sort-btn" id="hide-scheduled-btn" onclick="toggleHideScheduled();updateFilterMenu()">✓ Hide Scheduled</button>
+              <button class="sort-btn" onclick="resetAllFilters()" style="color:var(--red)">✕ Reset All</button>
+            </div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="resortByTime()" title="Re-sort each day by saved send times, earliest first" style="font-size:11px" id="sort-time-btn">⇅ Sort by Send Time</button>
-        <button class="btn btn-ghost btn-sm" id="hide-scheduled-btn" onclick="toggleHideScheduled()" style="font-size:11px">✓ Hide Scheduled</button>
+        <!-- SORT META MENU -->
+        <div style="position:relative">
+          <button class="btn btn-ghost btn-sm" id="sort-menu-btn" onclick="toggleMetaMenu('sort-menu')" style="font-size:11px;font-weight:600">⇅ Sort ▾</button>
+          <div id="sort-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 4px 16px rgba(30,58,138,0.12);z-index:600;min-width:180px;padding:12px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="sort-btn" id="sort-time-btn" onclick="resortByTime();updateSortMenu()" style="text-align:left">⇅ Sort by Send Time</button>
+              <button class="sort-btn" id="sort-tz-btn" onclick="toggleSortByTZ();updateSortMenu()" style="text-align:left">🕐 Sort by TZ</button>
+              <button class="sort-btn" id="sort-approver-btn" onclick="toggleSortByApprover();updateSortMenu()" style="text-align:left">👤 Sort by Approver</button>
+            </div>
+          </div>
+        </div>
+        <!-- SYNC -->
+        <div id="tz-dropdown" style="display:none"></div>
+        <div id="approver-dropdown" style="display:none"></div>
       </div>
       <div class="sync-btn">
         <span class="sync-status" id="sync-status">Configure Monday.com API to enable sync</span>
@@ -1401,6 +1440,94 @@ function applyCalViewingAs() {
   renderCalendar();
 }
 
+function toggleMetaMenu(id) {
+  const menus = ['filter-menu','sort-menu'];
+  menus.forEach(m => {
+    if (m !== id) document.getElementById(m).style.display = 'none';
+  });
+  const el = document.getElementById(id);
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    if (id === 'filter-menu') updateFilterMenu();
+    if (id === 'sort-menu') updateSortMenu();
+    // Close on outside click
+    setTimeout(() => {
+      const close = (e) => {
+        const btn = document.getElementById(id === 'filter-menu' ? 'filter-menu-btn' : 'sort-menu-btn');
+        if (!el.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+          el.style.display = 'none';
+          document.removeEventListener('click', close);
+        }
+      };
+      document.addEventListener('click', close);
+    }, 0);
+  }
+}
+
+function updateFilterMenu() {
+  // States
+  const stateOptions = [...new Set(clients.map(c => c.state).filter(Boolean))].sort();
+  const statesEl = document.getElementById('filter-menu-states');
+  if (statesEl) statesEl.innerHTML = `<button class="sort-btn ${activeStateFilter.size === 0 ? 'active' : ''}" onclick="setStateFilter('ALL');updateFilterMenu()">All</button>` +
+    stateOptions.map(s => `<button class="sort-btn ${activeStateFilter.has(s) ? 'active' : ''}" onclick="setStateFilter('${s}');updateFilterMenu()" style="background:${activeStateFilter.has(s) ? (s === 'WI' ? '#1e40af' : '#b45309') : ''};color:${activeStateFilter.has(s) ? '#fff' : ''};border-color:${activeStateFilter.has(s) ? (s === 'WI' ? '#1e40af' : '#b45309') : ''}">${s}</button>`).join('');
+  // TZ
+  const tzOptions = [...new Set(clients.map(c => c.timezone).filter(Boolean))].sort((a,b) => TZ_SORT_ORDER.indexOf(a) - TZ_SORT_ORDER.indexOf(b));
+  const tzEl = document.getElementById('filter-menu-tz');
+  if (tzEl) tzEl.innerHTML = `<button class="sort-btn ${tzFilter.size === 0 ? 'active' : ''}" onclick="clearTZFilter();updateFilterMenu()">All</button>` +
+    tzOptions.map(tz => `<button class="sort-btn ${tzFilter.has(tz) ? 'active' : ''}" onclick="toggleTZFilter('${tz}',${!tzFilter.has(tz)});updateFilterMenu()" style="background:${tzFilter.has(tz) ? '#f0fdf4' : ''};color:${tzFilter.has(tz) ? '#166534' : ''};border-color:${tzFilter.has(tz) ? '#bbf7d0' : ''}">${tz}</button>`).join('');
+  // Approvers
+  const appEl = document.getElementById('filter-menu-approvers');
+  if (appEl) appEl.innerHTML = APPROVERS.map(name => {
+    const checked = selectedApprovers.has(name);
+    const color = staffColor(name);
+    const initials = name.split(' ').filter(Boolean).map(w => w[0].toUpperCase()).join('');
+    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleApprover('${name.replace(/'/g,"\'")}',this.checked);updateFilterMenu()" style="accent-color:var(--navy)">
+      <span class="assigned-pill" style="background:${color}22;color:${color};border:1px solid ${color}55">${initials}</span>
+      <span>${name}</span>
+    </label>`;
+  }).join('');
+  // Hide Scheduled button state
+  const hsBtn = document.getElementById('hide-scheduled-btn');
+  if (hsBtn) { hsBtn.style.background = hideScheduled ? '#dcfce7' : ''; hsBtn.style.color = hideScheduled ? '#166534' : ''; }
+  // Sync viewing as
+  const vaEl = document.getElementById('filter-menu-va');
+  if (vaEl) vaEl.value = viewingAs;
+}
+
+function updateSortMenu() {
+  const btns = {
+    'sort-time-btn': sortByTime,
+    'sort-tz-btn': sortByTZ,
+    'sort-approver-btn': sortByApprover,
+  };
+  Object.entries(btns).forEach(([id, active]) => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.style.background = active ? '#eef2ff' : ''; btn.style.color = active ? 'var(--navy)' : ''; btn.style.fontWeight = active ? '600' : ''; }
+  });
+}
+
+function applyMenuViewingAs() {
+  const input = document.getElementById('filter-menu-va');
+  if (!input) return;
+  syncViewingAs(input.value.trim());
+  renderSchedule();
+  renderCalendar();
+}
+
+function resetAllFilters() {
+  activeStateFilter.clear(); currentState = 'ALL'; mapAllStates = true; calShowAllStates = true;
+  tzFilter.clear(); selectedApprovers.clear(); approverFilterOn = false;
+  sendTypeFilter = 'all'; hideScheduled = false; viewingAs = 'Everyone';
+  sortByTime = false; sortByTZ = false; sortByApprover = false;
+  ['viewing-as-input','cal-viewing-as-input','settings-viewing-as','filter-menu-va'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'Everyone'; });
+  document.querySelectorAll('#send-type-filter .sort-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('filter-all')?.classList.add('active');
+  updateFilterMenu(); updateSortMenu(); renderAll();
+  showToast('All filters reset', 'success');
+}
+
 function setSendTypeFilter(type) {
   // Clicking the active filter deactivates it (goes back to all)
   if (sendTypeFilter === type && type !== 'all') {
@@ -2037,7 +2164,7 @@ function selectAC(inputId, dropId, value) {
   if (input) input.value = value;
   if (drop) drop.classList.remove('open');
   // Sync viewing-as across all inputs and re-render
-  const vaInputs = ['viewing-as-input','cal-viewing-as-input','settings-viewing-as'];
+  const vaInputs = ['viewing-as-input','cal-viewing-as-input','settings-viewing-as','filter-menu-va'];
   if (vaInputs.includes(inputId)) {
     viewingAs = value === 'Everyone' ? 'Everyone' : value;
     vaInputs.forEach(id => { const el = document.getElementById(id); if (el) el.value = viewingAs; });
@@ -2270,16 +2397,7 @@ function toggleSettingsPanel() {
   if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
   renderSettingsPanel();
   panel.style.display = 'block';
-  setTimeout(() => {
-    const close = (e) => {
-      const btn = document.getElementById('settings-btn');
-      if (!panel.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
-        panel.style.display = 'none';
-        document.removeEventListener('click', close);
-      }
-    };
-    document.addEventListener('click', close);
-  }, 0);
+  // Settings stays open until user explicitly clicks Settings button again
 }
 
 function renderSettingsPanel() {
@@ -2288,7 +2406,10 @@ function renderSettingsPanel() {
   const tzOptions = [...new Set(clients.map(c => c.timezone).filter(Boolean))].sort();
   const stateOptions = [...new Set(clients.map(c => c.state).filter(Boolean))].sort();
   panel.innerHTML = `
-    <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em">Settings</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:600;color:var(--navy);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em">Settings</span>
+      <button onclick="resetAllFilters();renderSettingsPanel()" style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-family:var(--mono)">Reset All</button>
+    </div>
 
     <div style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Staff Profile</div>
