@@ -222,8 +222,36 @@
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); font-family: var(--mono); }
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
   .district-tooltip { background: var(--navy) !important; color: #fff !important; border: none !important; font-family: var(--mono); font-size: 11px; }
-  .dark-mode { filter: invert(1) hue-rotate(180deg); }
-  .dark-mode img, .dark-mode .leaflet-tile { filter: invert(1) hue-rotate(180deg); }
+  .dark-mode {
+    --bg: #0d0f14; --bg2: #151820; --bg3: #1c2030; --bg4: #242840;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+    --text: #e8eaf0; --text2: #9aa0b4; --text3: #5a6080;
+    --navy: #4a7cf0; --accent: #4a7cf0; --accent2: #2d5ccc;
+    --green: #2ecc71; --amber: #f0a500; --red: #e24b4a;
+  }
+  .dark-mode body { background: var(--bg); color: var(--text); }
+  .dark-mode .header { background: #0a0c11; }
+  .dark-mode .nav { background: var(--bg2); }
+  .dark-mode .map-sidebar, .dark-mode .event-panel, .dark-mode .modal,
+  .dark-mode .add-form, .dark-mode .task-card { background: var(--bg2); }
+  .dark-mode .form-input, .dark-mode .notes-area, .dark-mode .send-note-input,
+  .dark-mode .time-input, .dark-mode .edit-input { background: var(--bg3) !important; color: var(--text) !important; border-color: var(--border2) !important; }
+  .dark-mode .autocomplete-dropdown, .dark-mode #settings-panel,
+  .dark-mode #approver-dropdown, .dark-mode #tz-dropdown { background: var(--bg2) !important; border-color: var(--border2) !important; }
+  .dark-mode .autocomplete-option { color: var(--text) !important; }
+  .dark-mode .autocomplete-option:hover { background: var(--bg3) !important; }
+  .dark-mode .schedule-day-header { background: #1e3a8a !important; }
+  .dark-mode .schedule-sends, .dark-mode .send-row:nth-child(even) { background: var(--bg3); }
+  .dark-mode .cal-cell { background: var(--bg2); }
+  .dark-mode .cal-day-name { background: #1e3a8a !important; }
+  .dark-mode .leaflet-popup-content-wrapper { background: var(--bg2) !important; color: var(--text) !important; }
+  .dark-mode .btn-ghost { background: var(--bg3); color: var(--text2); border-color: var(--border2); }
+  .dark-mode .sort-btn { background: var(--bg3); color: var(--text2); border-color: var(--border2); }
+  .dark-mode .sort-btn.active { background: var(--navy); color: #fff; }
+  .dark-mode .client-list-item { border-color: var(--border); }
+  .dark-mode .client-list-item:hover { background: var(--bg3); }
+  .dark-mode .sidebar-header { background: var(--bg3); }
+  .dark-mode .toast { background: var(--bg2); }
 </style>
 </head>
 <body>
@@ -597,6 +625,8 @@ let darkMode = false; // dark mode toggle
 let districtLayers = {}; // leaflet layers for district borders
 let districtBordersOn = { WI_AD: false, WI_SD: false, WI_CD: false, KS_HD: false, KS_SD: false };
 const APPROVERS = ['Evangeline Erickson','Samantha Ruiz','John Colwell','Madison DeLille','Neil Goodman','Jacob Malinowski'];
+const APPROVER_SORT_ORDER = ['Neil Goodman', 'Madison DeLille', 'Samantha Ruiz', 'Jacob Malinowski', 'Evangeline Erickson', 'John Colwell'];
+const TZ_SORT_ORDER = ['ET', 'CT', 'MT', 'AZT', 'PT', 'AKT'];
 const STATE_NAMES = { WI: 'Wisconsin', KS: 'Kansas' };
 const STATES_WITH_CENTROIDS = ['WI', 'KS']; // states with hardcoded shapefile centroids
 
@@ -830,7 +860,15 @@ function renderMap() {
   if (!mapInstance || !clusterGroup) return;
   clusterGroup.clearLayers();
   mapMarkers = {};
-  const sc = stateClients(true);
+  let sc = stateClients(true);
+  // Filter by viewingAs — show clients who have at least one send assigned to this person
+  if (viewingAs !== 'Everyone') {
+    const assignedClientIds = new Set(
+      sends.filter(s => (s.assigned_people || '').split(',').map(n => n.trim()).includes(viewingAs))
+           .map(s => s.client_id)
+    );
+    sc = sc.filter(c => assignedClientIds.has(c.id));
+  }
   sc.forEach(client => {
     if (!client.lat || !client.lng) return;
     const color = officeColor(client.office);
@@ -1117,10 +1155,26 @@ function renderSchedule() {
         if (ta !== -999) return -1;
         if (tb !== -999) return 1;
       }
+      // TZ sort: ET first, CT, MT, AZT, PT, AKT
+      const ca = clients.find(c => c.id === a.client_id);
+      const cb = clients.find(c => c.id === b.client_id);
+      const tza = TZ_SORT_ORDER.indexOf(ca?.timezone || '');
+      const tzb = TZ_SORT_ORDER.indexOf(cb?.timezone || '');
+      const tzaVal = tza === -1 ? 99 : tza;
+      const tzbVal = tzb === -1 ? 99 : tzb;
+      if (tzaVal !== tzbVal) return tzaVal - tzbVal;
+      // Approver sort: Neil, Madison, Samantha, Jacob, Evangeline, John
+      const getApproverRank = (s) => {
+        const names = (s.assigned_people || '').split(',').map(n => n.trim());
+        const ranks = names.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; });
+        return Math.min(...ranks, 99);
+      };
+      const ra = getApproverRank(a), rb = getApproverRank(b);
+      if (ra !== rb) return ra - rb;
       // Default: emails first, then texts, then alphabetical
       if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
-      const na = (clients.find(c => c.id === a.client_id)?.name || a.client_name || '').toLowerCase();
-      const nb = (clients.find(c => c.id === b.client_id)?.name || b.client_name || '').toLowerCase();
+      const na = (ca?.name || a.client_name || '').toLowerCase();
+      const nb = (cb?.name || b.client_name || '').toLowerCase();
       return na.localeCompare(nb);
     });
   });
@@ -1163,9 +1217,13 @@ function renderSchedule() {
             const client = clients.find(c => c.id === s.client_id);
             const isScheduled = s.status === 'Scheduled/Sent';
             const rowBg = isScheduled ? 'background:#bbf7d0;' : (rowIdx % 2 === 1 ? 'background:var(--bg3);' : '');
+            const clientState = client ? client.state : '';
             const hasConflict = currentTime && daySends.some(other => {
               if (other.id === s.id) return false;
               if (other.type !== s.type) return false;
+              // Only flag conflict if same state
+              const otherClient = clients.find(c => c.id === other.client_id);
+              if (otherClient && otherClient.state !== clientState) return false;
               const otherTime = editedTimes[other.id] || other.time || '';
               if (!otherTime) return false;
               return Math.abs(timeToMins(currentTime) - timeToMins(otherTime)) < 60;
@@ -1314,28 +1372,40 @@ function getStaffList() {
   return list;
 }
 
+function syncViewingAs(val) {
+  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
+  ['viewing-as-input','cal-viewing-as-input','settings-viewing-as'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = viewingAs;
+  });
+}
+
 function applyViewingAs() {
   const input = document.getElementById('viewing-as-input');
   if (!input) return;
-  const val = input.value.trim();
-  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
-  input.value = viewingAs;
+  syncViewingAs(input.value.trim());
   renderSchedule();
+  renderCalendar();
 }
 
 function applyCalViewingAs() {
   const input = document.getElementById('cal-viewing-as-input');
   if (!input) return;
-  const val = input.value.trim();
-  viewingAs = (!val || val === 'Everyone') ? 'Everyone' : val;
-  input.value = viewingAs;
+  syncViewingAs(input.value.trim());
+  renderSchedule();
   renderCalendar();
 }
 
 function setSendTypeFilter(type) {
-  sendTypeFilter = type;
-  document.querySelectorAll('#send-type-filter .sort-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('filter-' + type)?.classList.add('active');
+  // Clicking the active filter deactivates it (goes back to all)
+  if (sendTypeFilter === type && type !== 'all') {
+    sendTypeFilter = 'all';
+    document.querySelectorAll('#send-type-filter .sort-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-all')?.classList.add('active');
+  } else {
+    sendTypeFilter = type;
+    document.querySelectorAll('#send-type-filter .sort-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-' + type)?.classList.add('active');
+  }
   renderSchedule();
 }
 
@@ -1932,8 +2002,9 @@ function filterAC(inputId, dropId, options) {
   const drop = document.getElementById(dropId);
   if (!input || !drop) return;
   const val = input.value.trim().toLowerCase();
-  // Show all options when empty, "everyone", or no match — don't filter down to nothing
-  const filtered = (!val || val === 'everyone') ? options : options.filter(o => o.toLowerCase().includes(val));
+  // For viewing-as fields: show all options when focused (don't filter by current value)
+  const isViewingAs = ['viewing-as-input','cal-viewing-as-input','settings-viewing-as'].includes(inputId);
+  const filtered = (isViewingAs || !val || val === 'everyone') ? options : options.filter(o => o.toLowerCase().includes(val));
   const toShow = filtered.length ? filtered : options;
   drop.innerHTML = toShow.map(o =>
     `<div class="autocomplete-option" onmousedown="selectAC('${inputId}','${dropId}','${o.replace(/'/g, "\'")}')">${o}</div>`
@@ -1946,9 +2017,14 @@ function selectAC(inputId, dropId, value) {
   const drop = document.getElementById(dropId);
   if (input) input.value = value;
   if (drop) drop.classList.remove('open');
-  // Immediately apply viewing-as filter when a name is selected
-  if (inputId === 'viewing-as-input') { viewingAs = value === 'Everyone' ? 'Everyone' : value; renderSchedule(); }
-  if (inputId === 'cal-viewing-as-input') { viewingAs = value === 'Everyone' ? 'Everyone' : value; renderCalendar(); }
+  // Sync viewing-as across all inputs and re-render
+  const vaInputs = ['viewing-as-input','cal-viewing-as-input','settings-viewing-as'];
+  if (vaInputs.includes(inputId)) {
+    viewingAs = value === 'Everyone' ? 'Everyone' : value;
+    vaInputs.forEach(id => { const el = document.getElementById(id); if (el) el.value = viewingAs; });
+    renderSchedule();
+    renderCalendar();
+  }
 }
 
 function closeACDelayed(dropId) {
