@@ -617,7 +617,9 @@ let approverFilterOn = false;
 let selectedApprovers = new Set(); // which approvers are checked
 let hideScheduled = false;
 let collapsedDays = {}; // date string → boolean
-let sortByTime = false; // true only when Re-Sort by Time is active
+let sortByTime = false;
+let sortByTZ = false;
+let sortByApprover = false;
 let tzFilter = new Set(); // which timezones to show (empty = all)
 let activeStateFilter = new Set(); // empty = all states
 let currentStaffName = ''; // currently loaded staff profile
@@ -1148,6 +1150,9 @@ function renderSchedule() {
   // Re-Sort by Time: sort by saved time ascending, earliest first
   Object.keys(byDay).forEach(date => {
     byDay[date].sort((a, b) => {
+      const ca = clients.find(c => c.id === a.client_id);
+      const cb = clients.find(c => c.id === b.client_id);
+
       if (sortByTime) {
         const ta = timeToMins(editedTimes[a.id] || a.time || '');
         const tb = timeToMins(editedTimes[b.id] || b.time || '');
@@ -1155,23 +1160,24 @@ function renderSchedule() {
         if (ta !== -999) return -1;
         if (tb !== -999) return 1;
       }
-      // TZ sort: ET first, CT, MT, AZT, PT, AKT
-      const ca = clients.find(c => c.id === a.client_id);
-      const cb = clients.find(c => c.id === b.client_id);
-      const tza = TZ_SORT_ORDER.indexOf(ca?.timezone || '');
-      const tzb = TZ_SORT_ORDER.indexOf(cb?.timezone || '');
-      const tzaVal = tza === -1 ? 99 : tza;
-      const tzbVal = tzb === -1 ? 99 : tzb;
-      if (tzaVal !== tzbVal) return tzaVal - tzbVal;
-      // Approver sort: Neil, Madison, Samantha, Jacob, Evangeline, John
-      const getApproverRank = (s) => {
-        const names = (s.assigned_people || '').split(',').map(n => n.trim());
-        const ranks = names.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; });
-        return Math.min(...ranks, 99);
-      };
-      const ra = getApproverRank(a), rb = getApproverRank(b);
-      if (ra !== rb) return ra - rb;
-      // Default: emails first, then texts, then alphabetical
+
+      if (sortByTZ) {
+        const tza = TZ_SORT_ORDER.indexOf(ca?.timezone || '');
+        const tzb = TZ_SORT_ORDER.indexOf(cb?.timezone || '');
+        const diff = (tza === -1 ? 99 : tza) - (tzb === -1 ? 99 : tzb);
+        if (diff !== 0) return diff;
+      }
+
+      if (sortByApprover) {
+        const getApproverRank = (s) => {
+          const names = (s.assigned_people || '').split(',').map(n => n.trim());
+          return Math.min(...names.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; }), 99);
+        };
+        const diff = getApproverRank(a) - getApproverRank(b);
+        if (diff !== 0) return diff;
+      }
+
+      // Default: emails first, texts, alphabetical
       if (a.type !== b.type) return a.type === 'email' ? -1 : 1;
       const na = (ca?.name || a.client_name || '').toLowerCase();
       const nb = (cb?.name || b.client_name || '').toLowerCase();
@@ -1498,8 +1504,21 @@ function clearTZFilter() {
 
 function resortByTime() {
   sortByTime = !sortByTime;
+  if (sortByTime) { sortByTZ = false; sortByApprover = false; }
   const btn = document.getElementById('sort-time-btn');
   if (btn) { btn.style.background = sortByTime ? '#eef2ff' : ''; btn.style.color = sortByTime ? 'var(--navy)' : ''; }
+  renderSchedule();
+}
+
+function toggleSortByTZ() {
+  sortByTZ = !sortByTZ;
+  if (sortByTZ) { sortByTime = false; sortByApprover = false; }
+  renderSchedule();
+}
+
+function toggleSortByApprover() {
+  sortByApprover = !sortByApprover;
+  if (sortByApprover) { sortByTime = false; sortByTZ = false; }
   renderSchedule();
 }
 
@@ -2345,6 +2364,8 @@ function renderSettingsPanel() {
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
       <button class="sort-btn ${hideScheduled ? 'active' : ''}" onclick="toggleHideScheduled();renderSettingsPanel()">✓ Hide Scheduled</button>
       <button class="sort-btn ${sortByTime ? 'active' : ''}" onclick="resortByTime();renderSettingsPanel()">⇅ Sort by Send Time</button>
+      <button class="sort-btn ${sortByTZ ? 'active' : ''}" onclick="toggleSortByTZ();renderSettingsPanel()">🕐 Sort by TZ</button>
+      <button class="sort-btn ${sortByApprover ? 'active' : ''}" onclick="toggleSortByApprover();renderSettingsPanel()">👤 Sort by Approver</button>
       <button class="sort-btn ${darkMode ? 'active' : ''}" onclick="toggleDarkMode();renderSettingsPanel()">🌙 Dark Mode</button>
     </div>
 
@@ -2413,7 +2434,7 @@ async function saveStaffSettings() {
   currentStaffName = name;
   const settings = {
     viewingAs, sendTypeFilter, tzFilter: [...tzFilter], selectedApprovers: [...selectedApprovers],
-    hideScheduled, sortByTime, darkMode, activeStateFilter: [...activeStateFilter],
+    hideScheduled, sortByTime, sortByTZ, sortByApprover, darkMode, activeStateFilter: [...activeStateFilter],
   };
   if (SUPABASE_CONFIGURED) {
     const existing = await sbFetch(`staff_settings?name=eq.${encodeURIComponent(name)}&select=name`);
@@ -2442,6 +2463,8 @@ async function loadStaffSettings() {
   if (s.selectedApprovers) { selectedApprovers = new Set(s.selectedApprovers); approverFilterOn = selectedApprovers.size > 0; }
   if (typeof s.hideScheduled === 'boolean') { hideScheduled = s.hideScheduled; }
   if (typeof s.sortByTime === 'boolean') { sortByTime = s.sortByTime; }
+  if (typeof s.sortByTZ === 'boolean') { sortByTZ = s.sortByTZ; }
+  if (typeof s.sortByApprover === 'boolean') { sortByApprover = s.sortByApprover; }
   if (typeof s.darkMode === 'boolean') { darkMode = s.darkMode; document.body.classList.toggle('dark-mode', darkMode); }
   if (s.activeStateFilter) { activeStateFilter = new Set(s.activeStateFilter); if (activeStateFilter.size === 1) { currentState = [...activeStateFilter][0]; mapAllStates = false; calShowAllStates = false; } }
   try { localStorage.setItem('gc_staff', name); } catch(e) {}
