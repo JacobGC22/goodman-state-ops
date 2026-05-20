@@ -2353,6 +2353,28 @@ function openShapefileUpload(e) {
 }
 function closeShapefileModal() { document.getElementById('shapefile-modal').classList.remove('open'); }
 
+function getPolygonCentroid(geometry) {
+  // Extract outer ring coords regardless of Polygon or MultiPolygon
+  let ring;
+  if (geometry.type === 'Polygon') {
+    ring = geometry.coordinates[0]; // outer ring only
+  } else if (geometry.type === 'MultiPolygon') {
+    // Use the largest polygon's outer ring
+    ring = geometry.coordinates.reduce((best, poly) => {
+      const r = poly[0];
+      return r.length > best.length ? r : best;
+    }, geometry.coordinates[0][0]);
+  } else return null;
+  if (!ring || !ring.length) return null;
+  // Simple average of outer ring vertices (fast, accurate enough for centroids)
+  let sumLat = 0, sumLng = 0;
+  for (const [lng, lat] of ring) { sumLng += lng; sumLat += lat; }
+  return [
+    Math.round(sumLat / ring.length * 10000) / 10000,
+    Math.round(sumLng / ring.length * 10000) / 10000
+  ];
+}
+
 async function processShapefiles() {
   const status = document.getElementById('shapefile-status');
   const houseFile = document.getElementById('shapefile-house').files[0];
@@ -2361,49 +2383,56 @@ async function processShapefiles() {
   if (!houseFile && !senateFile) { showToast('Upload at least one GeoJSON file', 'error'); return; }
   status.textContent = 'Processing...';
   const results = [];
+
   const processFile = async (file, suffix) => {
     if (!file) return;
+    status.textContent = `Reading ${file.name}...`;
     const text = await file.text();
-    const geojson = JSON.parse(text);
+    status.textContent = 'Parsing GeoJSON...';
+    let geojson;
+    try { geojson = JSON.parse(text); } catch(e) { showToast(`Failed to parse ${file.name} — is it valid GeoJSON?`, 'error'); return; }
+
     const centroids = {};
-    geojson.features.forEach(f => {
-      // Find district number from common property names
+    const NUM_PROPS = ['SLDLST','SLDUST','DISTRICT','DISTRICTNO','CD_NUM','CON2021','ASM2024','SEN2024','NAME'];
+
+    status.textContent = `Computing centroids for ${geojson.features?.length || 0} districts...`;
+    for (const f of (geojson.features || [])) {
       const props = f.properties || {};
-      const numProp = ['SLDLST','SLDUST','DISTRICT','DISTRICTNO','CD_NUM','CON2021','NAME'].find(k => props[k] !== undefined);
-      if (!numProp) return;
+      const numProp = NUM_PROPS.find(k => props[k] !== undefined);
+      if (!numProp) continue;
       const num = parseInt(props[numProp]);
-      if (isNaN(num)) return;
-      // Compute centroid from bounding box as approximation
-      const coords = f.geometry?.coordinates;
-      if (!coords) return;
-      const flat = coords.flat(Infinity);
-      const lngs = flat.filter((_,i) => i%2===0);
-      const lats = flat.filter((_,i) => i%2===1);
-      if (!lats.length) return;
-      const lat = lats.reduce((a,b)=>a+b,0)/lats.length;
-      const lng = lngs.reduce((a,b)=>a+b,0)/lngs.length;
-      centroids[num] = [Math.round(lat*10000)/10000, Math.round(lng*10000)/10000];
-    });
-    const key = `${currentState}_${suffix}`;
+      if (isNaN(num) || !f.geometry) continue;
+      const centroid = getPolygonCentroid(f.geometry);
+      if (centroid) centroids[num] = centroid;
+    }
+
+    const key = \`\${currentState}_\${suffix}\`;
     DISTRICT_CENTROIDS[key] = centroids;
+    // Store GeoJSON in memory for border rendering — don't send to Supabase (too large)
+    if (!window._districtGeoJSON) window._districtGeoJSON = {};
+    window._districtGeoJSON[key] = geojson;
+
+    // Save only the compact centroid data to Supabase
     if (SUPABASE_CONFIGURED) {
-      await sbFetch('state_centroids', 'POST', { id: key, state: currentState, type: suffix, centroids: JSON.stringify(centroids) });
+      status.textContent = \`Saving \${key} centroids to Supabase...\`;
+      const existing = await sbFetch(\`state_centroids?id=eq.\${key}&select=id\`);
+      if (existing && existing.length) {
+        await sbFetch(\`state_centroids?id=eq.\${key}\`, 'PATCH', { centroids: JSON.stringify(centroids) });
+      } else {
+        await sbFetch('state_centroids', 'POST', { id: key, state: currentState, type: suffix, centroids: JSON.stringify(centroids) });
+      }
     }
-    // Also save full GeoJSON to district_borders table for map rendering
-    if (SUPABASE_CONFIGURED) {
-      const [fileState, fileType] = key.split('_');
-      await sbFetch('district_borders', 'POST', { id: key, state: fileState, type: fileType, geojson: JSON.stringify(geojson) })
-        .catch(e => console.warn('Failed to save border GeoJSON:', e));
-    }
-    results.push(`${key}: ${Object.keys(centroids).length} districts`);
+    results.push(\`\${key}: \${Object.keys(centroids).length} districts\`);
   };
+
   await processFile(houseFile, 'HD');
   await processFile(senateFile, 'SD');
   await processFile(congressFile, 'CD');
+
   if (!STATES_WITH_CENTROIDS.includes(currentState)) STATES_WITH_CENTROIDS.push(currentState);
   status.textContent = 'Done: ' + results.join(', ');
   checkShapefileWarning();
-  showToast('Shapefiles processed', 'success');
+  showToast('Shapefiles processed — ' + results.join(', '), 'success');
 }
 
 // ============================================================
