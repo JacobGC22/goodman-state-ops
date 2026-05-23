@@ -821,7 +821,7 @@ async function autoSync() {
       const existing = sends.find(x => x.monday_id === s.monday_id);
       if (!existing) {
         const client = clients.find(c => c.id === s.client_id);
-        s.state = client ? client.state : 'WI';
+        s.state = client ? client.state : (currentState !== 'ALL' ? currentState : 'WI');
         const { time: _t, ...sendToSave } = s;
         if (!sendToSave.status) sendToSave.status = '';
         const saved = await sbFetch('sends', 'POST', sendToSave);
@@ -1212,23 +1212,34 @@ function renderSchedule() {
       }
 
       if (sortByApprover) {
-        const getApproverRank = (s) => {
+        const getApprover = (s) => {
           const names = (s.assigned_people || '').split(',').map(n => n.trim()).filter(Boolean);
-          if (!names.length) return 99;
-          let pool;
+          if (!names.length) return null;
+          const SENIOR = ['Neil Goodman', 'Jacob Malinowski'];
           if (names.length <= 2) {
-            // 1-2 people: the approver is whoever isn't NG/JM, or NG/JM if only one
-            pool = names.filter(n => !['Neil Goodman','Jacob Malinowski'].includes(n));
-            if (!pool.length) pool = names; // both are senior, use as-is
+            // 1-2 people: JM or NG is the approver
+            // Find whichever is JM/NG; if neither, use whoever is there
+            const senior = names.find(n => SENIOR.includes(n));
+            return senior || names[0];
           } else {
-            // 3+ people: ignore NG and JM, use the rest
-            pool = names.filter(n => !['Neil Goodman','Jacob Malinowski'].includes(n));
-            if (!pool.length) pool = names;
+            // 3+ people: ignore NG and JM entirely, use the rest
+            const nonSenior = names.filter(n => !SENIOR.includes(n));
+            if (!nonSenior.length) return names[0]; // fallback
+            // Among non-senior, pick highest ranked
+            return nonSenior.reduce((best, n) => {
+              const bi = APPROVER_SORT_ORDER.indexOf(best);
+              const ni = APPROVER_SORT_ORDER.indexOf(n);
+              const bRank = bi === -1 ? 99 : bi;
+              const nRank = ni === -1 ? 99 : ni;
+              return nRank < bRank ? n : best;
+            });
           }
-          return Math.min(...pool.map(n => { const i = APPROVER_SORT_ORDER.indexOf(n); return i === -1 ? 99 : i; }), 99);
         };
-        const diff = getApproverRank(a) - getApproverRank(b);
-        if (diff !== 0) return diff;
+        const approverA = getApprover(a);
+        const approverB = getApprover(b);
+        const rankA = approverA ? (APPROVER_SORT_ORDER.indexOf(approverA) === -1 ? 99 : APPROVER_SORT_ORDER.indexOf(approverA)) : 99;
+        const rankB = approverB ? (APPROVER_SORT_ORDER.indexOf(approverB) === -1 ? 99 : APPROVER_SORT_ORDER.indexOf(approverB)) : 99;
+        if (rankA !== rankB) return rankA - rankB;
       }
 
       // Default: emails first, texts, alphabetical
@@ -1715,7 +1726,7 @@ async function syncMonday() {
       const existing = sends.find(x => x.monday_id === s.monday_id);
       if (!existing) {
         const client = clients.find(c => c.id === s.client_id);
-        s.state = client ? client.state : currentState;
+        s.state = client ? client.state : (currentState !== 'ALL' ? currentState : 'WI');
         const { time: _t, ...sendToSave } = s;
         if (!sendToSave.status) sendToSave.status = '';
         const saved = await sbFetch('sends', 'POST', sendToSave);
@@ -2613,7 +2624,7 @@ function setStateFilter(state) {
     } else {
       activeStateFilter.add(state);
       if (activeStateFilter.size === 1) { currentState = state; mapAllStates = false; calShowAllStates = false; }
-      else { currentState = 'ALL'; mapAllStates = true; calShowAllStates = true; }
+      else { currentState = 'ALL'; mapAllStates = true; calShowAllStates = false; } // calShowAllStates=false so activeStateFilter applies
     }
   }
   try { localStorage.setItem('gc_state', currentState); } catch(e) {}
