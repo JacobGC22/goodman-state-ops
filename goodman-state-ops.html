@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Goodman Campaigns — State Ops</title>
+<title>tuesday.com — Goodman Campaigns</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -267,11 +267,11 @@
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">Goodman Campaigns / <span>State Ops</span></div>
+    <div class="logo"><span style="color:#f59e0b;font-weight:700;font-size:15px">tuesday</span><span style="color:rgba(255,255,255,0.4)">.com</span> <span style="color:rgba(255,255,255,0.3);font-size:11px">— not monday</span></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <div style="position:relative">
-      <button class="btn btn-ghost btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" style="font-size:13px">⚙ Settings</button>
+      <span style="width:10px;height:10px;background:#f59e0b;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle"></span><button class="btn btn-ghost btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" style="font-size:13px">⚙ Settings</button>
       <div id="settings-panel" onclick="event.stopPropagation()" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:#fff;border:1.5px solid var(--navy);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:2000;padding:16px">
         <!-- Settings panel content rendered by JS -->
       </div>
@@ -471,8 +471,7 @@
           <div class="form-field">
             <label>Applies to</label>
             <select class="form-input" id="evt-state-scope" onchange="populateClientDropdown()">
-              <option value="current">Current state only</option>
-              <option value="both">Both states (WI + KS)</option>
+              <option value="ALL">All states</option>
             </select>
           </div>
           <div class="form-field">
@@ -1681,7 +1680,7 @@ function toggleDayCollapse(date) {
 }
 
 async function syncMonday() {
-  const sc = stateClients().filter(c => c.monday_board);
+  const sc = clients.filter(c => c.monday_board);
   if (!sc.length) { showToast('No clients have Monday board IDs configured', 'error'); return; }
   if (!SUPABASE_CONFIGURED) { showToast('Configure Supabase to enable Monday sync', 'error'); return; }
   document.getElementById('sync-status').textContent = 'Syncing...';
@@ -1928,7 +1927,7 @@ async function addCalendarEvent() {
     await saveCategory(type.toLowerCase());
   }
 
-  const eventState = scope === 'both' ? 'both' : currentState;
+  const eventState = (!scope || scope === 'ALL') ? 'both' : scope;
   const evt = { id: `e${Date.now()}`, title, date, type: type.toLowerCase(), client_id: clientId, notes, state: eventState };
   const saved = await saveCalendarEvent(evt);
   if (!saved) return;
@@ -1997,21 +1996,28 @@ async function toggleDistrictBorder(key) {
     style: { color, weight: 1.5, fillOpacity: 0.08, fillColor: color },
     onEachFeature: (feature, layer) => {
       const props = feature.properties || {};
-      const numProp = ['SLDLST','SLDUST','CON2021','DISTRICT'].find(k => props[k] !== undefined);
-      const num = numProp ? parseInt(props[numProp]) : null;
-      if (num) {
-        layer.bindTooltip(`${key.replace('_',' ')} ${num}`, { permanent: false, sticky: true, className: 'district-tooltip' });
-        layer.on('click', () => {
-          // Find client in this district
-          const prefix = key.includes('AD') || key.includes('HD') ? '' : '';
-          const districtStr = num.toString();
-          const match = clients.find(c => {
-            const d = (c.district || '').replace(/[^0-9]/g,'');
-            return d === districtStr && c.state === key.split('_')[0];
-          });
-          if (match) openClientDetail(match.id);
+      // Support both our processed format (district_num) and raw shapefile formats
+      const num = props.district_num || props.SLDLST || props.SLDUST || props.CON2021 || props.ASM2024 || props.SEN2024 || null;
+      const distNum = num ? parseInt(num) : null;
+      const label = props.label || (distNum ? `${key.replace('_',' ')} ${distNum}` : key);
+      layer.bindTooltip(label, { permanent: false, sticky: true, className: 'district-tooltip' });
+      layer.on('click', () => {
+        if (!distNum) return;
+        const districtStr = distNum.toString();
+        const stateCode = key.split('_')[0];
+        const match = clients.find(c => {
+          const d = (c.district || '').replace(/[^0-9]/g, '');
+          return d === districtStr && c.state === stateCode;
         });
-      }
+        if (match) {
+          // Switch to map tab and open client detail
+          if (currentTab !== 'map') switchTab('map');
+          openClientDetail(match.id);
+        } else {
+          // Show tooltip indicating no client in this district
+          showToast(`${label} — no client assigned`, 'success');
+        }
+      });
     }
   }).addTo(mapInstance);
 }
@@ -2156,10 +2162,21 @@ async function saveNewClient() {
 }
 
 function populateClientDropdown() {
+  // Populate state scope dropdown from actual client states
+  const scopeSel = document.getElementById('evt-state-scope');
+  if (scopeSel) {
+    const currentScope = scopeSel.value;
+    const states = [...new Set(clients.map(c => c.state).filter(Boolean))].sort();
+    scopeSel.innerHTML = '<option value="ALL">All states</option>' +
+      states.map(s => `<option value="${s}" ${currentScope === s ? 'selected' : ''}>${STATE_NAMES[s] || s}</option>`).join('');
+    if (!scopeSel.value) scopeSel.value = 'ALL';
+  }
+
   const sel = document.getElementById('evt-client');
+  if (!sel) return;
   const current = sel.value;
   const scope = document.getElementById('evt-state-scope')?.value;
-  const clientPool = (scope === 'both' || calShowAllStates) ? clients : stateClients();
+  const clientPool = (!scope || scope === 'ALL') ? clients : clients.filter(c => c.state === scope);
   sel.innerHTML = '<option value="">All / State-wide</option>' + clientPool.map(c => `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${c.name} (${c.state})</option>`).join('');
 }
 
