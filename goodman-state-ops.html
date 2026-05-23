@@ -1715,7 +1715,10 @@ async function syncMonday() {
           client_id: client.id,
           client_name: client.name.split(' ')[1] || client.name
         })
-      }).then(r => r.json()).catch(e => { console.warn(`Sync failed for ${client.name}:`, e); return { sends: [] }; })
+      }).then(r => r.json()).then(data => {
+        console.log(`Sync ${client.name} (board ${client.monday_board}):`, data.sends?.length ?? 0, 'sends', data.message || '');
+        return data;
+      }).catch(e => { console.warn(`Sync failed for ${client.name}:`, e); return { sends: [] }; })
     );
     const allResults = await Promise.all(allFetches);
     const results = allResults.flatMap(r => r.sends || []);
